@@ -13,7 +13,8 @@ import numpy as np
 import pandas as pd
 
 from .common import DOWN, NS, PALETTE, UP, Job, UserFacingError, commas, fmt_n, log_exc, pct, style
-from .io_utils import collapse_technical_replicates, infer_groups, infer_sex, load_bulk, map_gene_ids
+from .io_utils import (collapse_technical_replicates, infer_groups, infer_sex, load_bulk, map_gene_ids,
+                       numeric_with_units, unify_level_case)
 
 warnings.filterwarnings("ignore")
 REF_RE = re.compile(r"ctrl|control|untreat|vehicle|^wt$|wild|mock|dmso|naive|baseline|normal|uninf|non.?infect|sham|pbs|^no|healthy", re.I)
@@ -40,20 +41,39 @@ def run(job: Job, files: list[Path], params: dict):
     counts.to_csv(job.root / "counts_used.csv")
     S, G0 = counts.shape[1], counts.shape[0]
     if meta is None:
-        meta = pd.DataFrame({"condition": infer_groups(list(counts.columns))}, index=counts.columns)
-        notes.append("No metadata file — groups were inferred from sample names. Upload a metadata CSV (sample, condition, batch…) for full control.")
+        g, how = infer_groups(list(counts.columns))
+        if how == "arbitrary":
+            # the fallback just cuts the sample order in half: testing that would produce a full set of
+            # results describing nothing, which is worse than stopping here
+            raise UserFacingError(
+                "There is no metadata, and the sample names carry no group structure to infer one from, so "
+                "there is nothing to compare. Two ways forward: upload a metadata CSV whose first column "
+                "matches your sample names and which has a <b>condition</b> column, or type the group of each "
+                f"sample into “Sample group labels” in the Parameters section ({len(counts.columns)} labels, "
+                "comma-separated, in column order).")
+        meta = pd.DataFrame({"condition": g}, index=counts.columns)
+        notes.append(f"WARN:No metadata file — groups were inferred from the sample names ({how} pattern): "
+                     + ", ".join(sorted(set(g))[:6])
+                     + ". Check they are right; upload a metadata CSV (sample, condition, batch…) for full control.")
     meta = meta.copy()
     meta.index = meta.index.astype(str)
     numeric_cols = []
     meta = meta.replace({"": np.nan, "NA": np.nan, "nan": np.nan, "None": np.nan})
     meta = meta.dropna(axis=1, how="all")
     for c in meta.columns:
-        col = pd.to_numeric(meta[c], errors="coerce")
-        if col.notna().all() and col.nunique() > 5:
+        # units and inconsistent capitalisation are the norm in GEO characteristics; clean both before
+        # deciding whether a column is continuous, or "8yr" turns age into a 77-level categorical
+        col = numeric_with_units(meta[c])
+        if col is not None and col.notna().all() and col.nunique() > 5:
             meta[c] = col.astype(float)          # continuous covariate (age, passage, RIN…)
             numeric_cols.append(c)
         else:
             meta[c] = meta[c].where(meta[c].isna(), meta[c].astype(str))
+            merged = unify_level_case(meta[c])
+            if merged.nunique() < meta[c].nunique():
+                notes.append(f"Levels of <b>{c}</b> that differed only in capitalisation were merged "
+                             f"({meta[c].nunique()} → {merged.nunique()}): {', '.join(sorted(merged.unique())[:6])}.")
+                meta[c] = merged
     if params.get("groups"):
         g = [x.strip() for x in params["groups"].split(",")]
         if len(g) != S:

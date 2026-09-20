@@ -175,6 +175,55 @@ MAPPING_URLS = {  # related-sciences/ensembl-genes output branches (Ensembl 104)
 }
 
 
+# UCSC refGene: RefSeq transcript accession -> gene symbol. Many GEO tables (HOMER/featureCounts output,
+# and anything quantified against a RefSeq annotation) are indexed by NM_/NR_ accessions, which every
+# gene-set and network resource misses — without this, GSEA and pathway activity silently find nothing.
+REFSEQ_URLS = {
+    "human": "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/refGene.txt.gz",
+    "mouse": "https://hgdownload.soe.ucsc.edu/goldenPath/mm39/database/refGene.txt.gz",
+}
+
+
+def refseq_table(species: str) -> pd.Series | None:
+    """RefSeq accession (no version) -> symbol. Cached in ~/.rnaseq-bench."""
+    p = CACHE / f"refseq_{species}.tsv.gz"
+    if not p.exists():
+        try:
+            with _open(REFSEQ_URLS[species], 120) as r, open(p, "wb") as f:
+                shutil.copyfileobj(r, f)
+        except Exception:  # noqa: BLE001
+            return None
+    try:
+        t = pd.read_csv(p, sep="\t", header=None, usecols=[1, 12], names=["acc", "symbol"], dtype=str)
+        t["acc"] = t["acc"].str.replace(r"\.\d+$", "", regex=True)
+        return t.dropna().drop_duplicates("acc").set_index("acc")["symbol"]
+    except Exception:  # noqa: BLE001
+        p.unlink(missing_ok=True)
+        return None
+
+
+def map_refseq(ids: pd.Index) -> tuple[pd.Series, str]:
+    """Symbols aligned to ids, and the species whose table matched best.
+
+    A RefSeq accession does not say which species it belongs to, so both tables are tried and the one
+    that explains more of the index wins.
+    """
+    stripped = ids.str.replace(r"\.\d+$", "", regex=True)
+    best, best_species, best_hits = None, "unknown", 0
+    for sp in ("human", "mouse"):
+        t = refseq_table(sp)
+        if t is None:
+            continue
+        sym = t.reindex(stripped)
+        hits = int(sym.notna().sum())
+        if hits > best_hits:
+            best, best_species, best_hits = sym, sp, hits
+    if best is None or best_hits < 0.2 * len(ids):
+        return pd.Series(ids, index=ids), "unknown"
+    out = pd.Series([s if isinstance(s, str) and s else i for s, i in zip(best.values, ids)], index=ids)
+    return out, best_species
+
+
 def ensembl_table(species: str) -> pd.DataFrame | None:
     """Ensembl stable ID -> symbol / chromosome / biotype. Cached in ~/.rnaseq-bench."""
     p = CACHE / f"ensembl_{species}.tsv.gz"
