@@ -26,6 +26,16 @@ Fixes
 - The generated script covers the expert add-ons that a job actually ran, and its requirements line
   lists the packages they need.
 - The PDF report header said TRANSCRIPT LENS.
+- **Downloads that need the network now work on the Mac app.** Its Python ships no CA certificates and
+  does not read the keychain, so every `urllib` download failed with a certificate error — PROGENy and
+  CollecTRI reported "needs internet" on machines that had internet. All TLS clients now use certifi.
+- The launcher installs the expert add-on packages separately from the ones the app needs to run, so a
+  failure there can no longer stop the app from starting, and it cannot downgrade numpy/pandas/scanpy to
+  satisfy an add-on.
+- `liana` (cell–cell communication) is unavailable on this stack: releases new enough for the current
+  anndata require pandas 2, and the rest of the analysis runs on pandas 3. The step says so plainly;
+  nothing else is affected.
+- build_mac.sh wrote the versioned zip one directory above the app.
 - Pipeline-derived cell columns (qc_pass, leiden, …) are no longer offered as batch, sample or
   condition columns.
 

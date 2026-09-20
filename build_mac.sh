@@ -9,6 +9,7 @@ cd "$(dirname "$0")"
 V=$(cat VERSION)
 if [ -n "${APP:-}" ]; then :; elif [ -d "../RNAseq Bench.app" ]; then APP="../RNAseq Bench.app"; else APP="macos/RNAseq Bench.app"; fi
 OUT_DIR="${OUT_DIR:-$(dirname "$APP")}"
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"   # absolute: the zip step runs in a subshell that changes directory
 [ -d "$APP/Contents" ] || { echo "no app bundle at $APP — copy macos/RNAseq Bench.app there first"; exit 1; }
 sed -i.bak "s|<key>CFBundleVersion</key><string>[^<]*</string>|<key>CFBundleVersion</key><string>$V</string>|; s|<key>CFBundleShortVersionString</key><string>[^<]*</string>|<key>CFBundleShortVersionString</key><string>$V</string>|" "$APP/Contents/Info.plist" && rm -f "$APP/Contents/Info.plist.bak"
 mkdir -p "$APP/Contents/Resources/app"
