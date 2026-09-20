@@ -390,6 +390,14 @@ def cell_communication(job: Job, adata, species: str, group_key: str = "cell_typ
                           note=f"Specific (specificity rank < 0.05) in one condition and not the other. {b_}: {len(only_b)} unique, {a_}: {len(only_a)} unique, shared: {len(per[a_] & per[b_])}.")
         job.method("Cell–cell communication", f"LIANA rank_aggregate ({resource} resource, expr_prop 0.1, 500 permutations) on log-normalized counts grouped by {key}.")
         return True
+    except ImportError:
+        # liana caps pandas below 3 from 1.9 on, and 1.8 predates the current anndata API, so there is
+        # no version that runs on this stack — say so instead of leaving "needs internet" hanging.
+        job.flag("info", "Cell–cell communication skipped — the liana package is not installed. Its current "
+                         "releases require pandas 2, while the rest of the analysis runs on pandas 3; every "
+                         "other result here is unaffected.")
+        log_exc("liana import")
+        return False
     except Exception:  # noqa: BLE001
         job.flag("info", f"Cell–cell communication skipped ({log_exc('liana')}).")
         return False

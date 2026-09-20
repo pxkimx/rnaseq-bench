@@ -34,4 +34,7 @@ certifi>=2024
 # retries on the next launch, so a failure here must never stop the app from starting.
 celltypist>=1.6            # automated cell-type annotation
 decoupler>=2.0             # pathway / TF activity (PROGENy, CollecTRI)
-liana>=1.4                 # ligand–receptor analysis
+# liana: only 1.9+ works with the current anndata API, and those releases require pandas < 3, which the
+# rest of the stack has moved past. Left here so it installs wherever that resolves; where it does not,
+# the cell-cell communication step reports itself as skipped and nothing else is affected.
+liana>=1.9                 # ligand–receptor analysis
