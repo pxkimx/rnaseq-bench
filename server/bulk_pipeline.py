@@ -60,9 +60,12 @@ def run(job: Job, files: list[Path], params: dict):
             raise UserFacingError(f"Enter exactly {S} group labels (you entered {len(g)}).")
         meta["condition"] = g
 
-    if params.get("infer_sex", True) and not any(c.lower() in ("sex", "gender") for c in meta.columns):
+    has_sex_col = any(c.lower() in ("sex", "gender") for c in meta.columns)
+    sex_inferred = False
+    if params.get("infer_sex", True) and not has_sex_col:
         sx = infer_sex(counts)
         if sx is not None:
+            sex_inferred = True
             meta["sex_inferred"] = sx.reindex(meta.index).values
             notes.append("Sex was inferred from XIST vs Y-linked gene expression (column sex_inferred): "
                          + ", ".join(f"{k} {v}" for k, v in sx.value_counts().items()) + ".")
@@ -115,10 +118,34 @@ def run(job: Job, files: list[Path], params: dict):
     cf = counts[keep]
     job.step(12, f"Running DESeq2 on {len(cf):,} genes × {S} samples")
     design = "~" + " + ".join(covars + [factor])
+    # columns that describe the same split of the samples as the design factor: their effect can never be
+    # separated from it, so they must not be offered (or advised) as covariates
+    confounded = {c for c in cand if c != factor and c not in numeric_cols
+                  and (meta.groupby(c, observed=True)[factor].nunique().max() <= 1
+                       or meta.groupby(factor, observed=True)[c].nunique().max() <= 1)}
     inference = DefaultInference(n_cpus=4)
     # make the reference level the baseline of the design matrix (formulaic follows Categorical order), so the
     # contrast coefficient exists for LFC shrinkage regardless of alphabetical order
     meta[factor] = pd.Categorical(meta[factor], categories=[ref] + alts)
+    # a covariate that never varies inside a level of the factor is indistinguishable from the factor itself;
+    # DESeq2 would fail deep inside the GLM with "Singular matrix", which tells the user nothing
+    dc = covars + [factor]
+    X = pd.get_dummies(meta[dc].astype({c: str for c in dc if c not in numeric_cols}), drop_first=True, dtype=float)
+    X.insert(0, "_intercept", 1.0)
+    if np.linalg.matrix_rank(X.values) < X.shape[1]:
+        bad = [c for c in covars if c in confounded]
+        if bad:
+            ex = bad[0]
+            tab = pd.crosstab(meta[ex], meta[factor])
+            shown = "; ".join(f"{i} → {', '.join(tab.columns[tab.loc[i] > 0])}" for i in tab.index[:4])
+            raise UserFacingError(
+                f"The design ~{' + '.join(dc)} cannot be fitted: <b>{ex}</b> and <b>{factor}</b> describe the same split of "
+                f"your samples ({shown}), so no test can tell a {ex} effect apart from a {factor} effect. "
+                f"Remove {ex} from “Adjust for”, or compare {factor} within a single {ex} group.")
+        raise UserFacingError(
+            f"The design ~{' + '.join(dc)} cannot be fitted: the covariates you chose overlap too much with {factor} (or "
+            "with each other) for the model to separate them. Adjust for fewer variables — each one must vary within "
+            f"every {factor} group.")
     dds = DeseqDataSet(counts=cf.T, metadata=meta, design=design, refit_cooks=True, inference=inference, quiet=True)
     dds.deseq2()
     job.step(45, "Variance-stabilizing transform")
@@ -206,7 +233,13 @@ def run(job: Job, files: list[Path], params: dict):
              f"<b>{factor}</b> explains {100*fac_pc.max():.0f}% of the variance along {best_pc} ({100*pvar[int(best_pc[2])-1]:.0f}% of total)"
              + (" — the groups separate clearly." if fac_pc.max() > 0.5 else " — groups overlap; the effect is small relative to other variation."))
     for c, p, v in strong_other[:2]:
-        job.flag("warn", f"<b>{c}</b> explains {100*v:.0f}% of {p}. Consider adding it as a covariate in the design (~ {c} + {factor}).")
+        # only suggest it if the design would still be fittable — a variable that tracks the factor cannot be adjusted for
+        if c in confounded:
+            job.flag("warn", f"<b>{c}</b> explains {100*v:.0f}% of {p}, but it describes the same split of the samples as "
+                             f"{factor}, so it cannot be adjusted for — any {factor} difference you find may equally be a "
+                             f"{c} difference. This is a limit of the experiment's design, not of the analysis.")
+        else:
+            job.flag("warn", f"<b>{c}</b> explains {100*v:.0f}% of {p}. Consider adding it as a covariate in the design (~ {c} + {factor}).")
     nA, nB = (meta[factor] == ref).sum(), (meta[factor] == alt).sum()
     if min(nA, nB) < 3:
         job.flag("warn", f"Only {min(nA, nB)} replicate(s) in a group — dispersion estimates are unreliable below 3; treat the gene list as exploratory.")
@@ -276,7 +309,9 @@ def run(job: Job, files: list[Path], params: dict):
     ax.set_xticklabels([f"{p}\n{100*pvar[i]:.0f}%" for i, p in enumerate(r2.columns)], fontsize=8, rotation=0)
     job.figure("pc_assoc", "Which metadata drives each PC?", fig,
                how="R² from a one-way ANOVA of each PC on each metadata column. It reveals hidden batch effects: any strong, unmodelled factor on an early PC belongs in the design formula.",
-               yours=("; ".join(f"<b>{c}</b> drives {p} (R² {v:.2f})" for c, p, v in strong_other[:3]) + " — consider it as a covariate.") if strong_other else f"Only <b>{factor}</b> strongly associates with the leading PCs.")
+               yours=("; ".join(f"<b>{c}</b> drives {p} (R² {v:.2f})" for c, p, v in strong_other[:3])
+                      + (" — consider it as a covariate." if any(c not in confounded for c, _, _ in strong_other[:3])
+                         else " — already in the design or inseparable from " + factor + ".")) if strong_other else f"Only <b>{factor}</b> strongly associates with the leading PCs.")
 
     # ---------------------------------------------------------------- DE figures
     job.step(70, "Plotting differential expression")
@@ -441,5 +476,131 @@ def run(job: Job, files: list[Path], params: dict):
     if enriched:
         job.method("Enrichment", "GSEApy Enrichr over-representation (Hallmark 2020, GO BP 2023, KEGG), background = tested genes, BH-adjusted.")
     job.method("Caveats", "Significance depends on replicates and a correct design. Interaction terms, paired designs beyond additive covariates, and time-course models need a custom analysis.")
+    # ---------------------------------------------------------------- parameters panel
+    try:
+        job.result["params"].update({
+            "collapse_replicates": cr if cr in ("auto", None) else str(bool(cr)).lower(),
+            "infer_sex": bool(params.get("infer_sex", True)), "genes": params.get("genes") or "",
+            "gsea": bool(params.get("gsea", True)), "activity": bool(params.get("activity", True)),
+            "enrichment": bool(params.get("enrichment", True))})
+        job.result["params_panel"] = _panel(params, {
+            "S": S, "G0": G0, "collapsed": collapsed, "collapse": cr if cr in ("auto", None) else str(bool(cr)).lower(),
+            "infer_sex": params.get("infer_sex", True), "sex_inferred": sex_inferred, "has_sex_col": has_sex_col,
+            "columns": cand, "levels": {c: sorted(meta[c].unique()) for c in cand},
+            "factor": factor, "ref": ref, "alt": alt, "covars": covars, "design": design,
+            "min_n": min_n, "n_genes": len(cf), "alpha": alpha, "lfc": lfc_thr, "confounded": sorted(confounded),
+            "n_up": len(up), "n_down": len(down), "flags": job.result.get("flags") or []})
+    except Exception:  # noqa: BLE001
+        log_exc("params panel")
+
     job.result["versions"] = {p: version(p) for p in ["pydeseq2", "numpy", "pandas", "scipy", "seaborn", "gseapy"]}
     job.result["summary"] = {"up": len(up), "down": len(down)}
+
+
+def _panel(params, ctx):
+    """Every choice this run made, with the reason it was made (see server/params_spec.py)."""
+    from .params_spec import F, G, skipped, src
+    cols, lv = ctx["columns"], ctx["levels"]
+    flags = ctx["flags"]
+    factor, ref, alt = ctx["factor"], ctx["ref"], ctx["alt"]
+    groups = [
+        G("input", "Input and samples", [
+            F("collapse_replicates", "Sum technical replicates", ctx["collapse"],
+              ("Columns that were the same library sequenced more than once were summed — technical replicates are not "
+               "independent observations and DESeq2 expects one column per biological sample."
+               if ctx["collapsed"] else
+               "No technical replicates were detected, so every column was treated as its own biological sample. "
+               "Set this if several columns are the same library run on different lanes."),
+              type="select", source=src(params, "collapse_replicates"), options=["auto", "true", "false"]),
+            F("groups", "Sample group labels", params.get("groups") or "",
+              (f"Taken from your metadata file ({ctx['S']} samples, columns: {', '.join(cols)})." if not params.get("groups")
+               else "You typed these labels, overriding the metadata."),
+              type="text", source=src(params, "groups"), placeholder="only needed without a metadata file"),
+            F("infer_sex", "Infer sex from XIST / Y genes", bool(ctx["infer_sex"]),
+              ("No sex column was in your metadata, so it was inferred from XIST versus Y-linked expression and added as "
+               "sex_inferred — worth adjusting for, since it is a common hidden source of variance."
+               if ctx["sex_inferred"] else
+               "Your metadata already has a sex column, so nothing was inferred." if ctx["has_sex_col"] else
+               "Could not be inferred from these genes."),
+              type="bool", source=src(params, "infer_sex"))],
+            note=f"{ctx['S']} samples × {ctx['G0']:,} genes."),
+
+        G("design", "Experimental design", [
+            F("factor", "Design factor", factor,
+              (f"You chose '{factor}'." if src(params, "factor") == "user" else
+               f"'{factor}' was picked automatically: it splits the samples into {len(lv.get(factor, []))} groups with "
+               "replicates, has a value for every sample, and its name matches the usual condition-like columns. "
+               "This is the variable being tested — if it is the wrong one, nothing below is meaningful."),
+              type="select", source=src(params, "factor", auto=True), options=cols),
+            F("reference", "Reference (baseline) level", ref,
+              (f"You set '{ref}' as the baseline." if src(params, "reference") == "user" else
+               f"'{ref}' was taken as the baseline because its name looks like a control. ") +
+              f"It is the denominator: a positive log2 fold change means higher in {alt} than in {ref}. Getting this "
+              "backwards flips the sign of every result.",
+              type="select", source=src(params, "reference", auto=True), options=lv.get(factor, [])),
+            F("alternative", "Compared against", alt,
+              f"The level being tested against {ref}. Only two levels are compared at a time; re-run with a different one "
+              "to test another contrast." + (f" Other levels present: {', '.join(x for x in lv.get(factor, []) if x not in (ref, alt))}."
+                                             if len(lv.get(factor, [])) > 2 else ""),
+              type="select", source=src(params, "alternative", auto=True), options=lv.get(factor, [])),
+            F("covariates", "Adjust for", ctx["covars"],
+              (f"The model is {ctx['design']} — {', '.join(ctx['covars'])} "
+               f"{'is' if len(ctx['covars']) == 1 else 'are'} held constant, so a difference in "
+               f"{'it' if len(ctx['covars']) == 1 else 'them'} is not read as an effect of {factor}." if ctx["covars"] else
+               "Nothing is adjusted for: the model is ~" + factor + ". If your samples came in batches, or differ in sex, "
+               "age or RIN, add that column here — an unadjusted nuisance variable both hides real effects and creates "
+               "false ones.") +
+              " Only add a variable that varies within each group." +
+              (f" Not offered here: {', '.join(ctx['confounded'])} — each splits your samples exactly the way {factor} does, "
+               "so its effect could never be told apart from the one you are testing."
+               if ctx["confounded"] else
+               " A variable that tracks the condition would remove the very effect you are testing."),
+              type="multiselect", source=src(params, "covariates"),
+              options=[c for c in cols if c != factor and c not in ctx["confounded"]])],
+            note=f"Design: {ctx['design']}"),
+
+        G("filter", "Filtering and significance", [
+            F("_filter", "Gene filter", f"≥ 10 counts in ≥ {ctx['min_n']} samples → {ctx['n_genes']:,} genes tested",
+              f"{ctx['min_n']} is the size of your smallest group, so a gene expressed only in one group still survives. "
+              "Genes below this carry no information and would only cost statistical power through multiple testing. Fixed.",
+              type="fixed", source="auto"),
+            F("alpha", "FDR threshold (padj)", ctx["alpha"],
+              "The false discovery rate you accept among the genes you call significant: at 0.05, about 5% of them are "
+              "expected to be false. This is also handed to DESeq2 for independent filtering, so changing it slightly "
+              "changes which genes are testable, not just which are labelled.",
+              type="float", source=src(params, "alpha"), step=0.01, min=0.001, max=0.5),
+            F("lfc", "Minimum |log2 fold change|", ctx["lfc"],
+              f"A gene must also change by at least {2 ** float(ctx['lfc']):.3g}-fold (|log2FC| ≥ {ctx['lfc']}) to be called. "
+              "With enough replicates, tiny but consistent changes become statistically significant without being "
+              "biologically interesting; this filter is about effect size, not confidence. It is applied after testing.",
+              type="float", source=src(params, "lfc"), step=0.25, min=0, max=5),
+            F("_shrink", "Log fold-change shrinkage", "apeGLM-style, on the tested contrast",
+              "Low-count genes produce wild fold changes from very little evidence. Shrinkage pulls those toward zero while "
+              "leaving well-measured genes alone, which is what makes the volcano and the ranking trustworthy. Fixed.",
+              type="fixed")],
+            note=f"{ctx['n_up']} up, {ctx['n_down']} down at padj < {ctx['alpha']} and |log2FC| ≥ {ctx['lfc']}."),
+
+        G("addons", "Optional analyses", [
+            F("genes", "Genes of interest", params.get("genes") or "",
+              "Your own gene list gets a per-sample expression panel and its own statistics table, whether or not the genes "
+              "passed the thresholds above. Comma-separated symbols.",
+              type="text", source=src(params, "genes"), placeholder="e.g. TNF, IL6, CXCL10"),
+            F("gsea", "GSEA (pre-ranked)", bool(params.get("gsea", True)),
+              "Ranks all tested genes by the Wald statistic and asks which gene sets concentrate at either end (Hallmark, "
+              "GO BP, KEGG, Reactome). Unlike the enrichment below it uses no significance cut-off, so coordinated small "
+              "changes across a pathway are still detected." + skipped(flags, "GSEA"),
+              type="bool", source=src(params, "gsea")),
+            F("activity", "Pathway and TF activity (decoupler)", bool(params.get("activity", True)),
+              "PROGENy scores 14 signalling pathways from their downstream response genes, and CollecTRI infers "
+              "transcription-factor activity from the behaviour of each factor's targets — both read the consequences of "
+              "activity rather than the expression of the pathway members, which is usually a poor proxy."
+              + skipped(flags, "activity"), type="bool", source=src(params, "activity")),
+            F("enrichment", "Over-representation (Enrichr)", bool(params.get("enrichment", True)),
+              ("Asks whether your significant up- and down-gene lists contain more members of a pathway than chance, with "
+               "the tested genes as background. Needs internet." + skipped(flags, "enrichment")
+               if ctx["n_up"] >= 5 or ctx["n_down"] >= 5 else
+               "Skipped: fewer than 5 significant genes in either direction, which is too few to over-represent anything."),
+              type="bool", source=src(params, "enrichment"))],
+            note="Each is skipped with a note rather than failing when its reference data cannot be reached."),
+    ]
+    return groups

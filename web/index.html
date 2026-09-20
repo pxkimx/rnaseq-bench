@@ -280,6 +280,30 @@ body.chat-open .fab{display:none}
 .drawer .dh h3{margin:0;font-size:16px;flex:1}
 .drawer .db{overflow:auto;padding:8px 4px}
 .drawer .df{padding:14px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.drawer.wide{width:min(760px,100%)}
+.drawer .df .sp{flex:1;font-size:12px;color:var(--muted);align-self:center;text-align:left}
+.pgroup{border-bottom:1px solid var(--line2);padding:2px 0 10px}
+.pgroup:last-child{border-bottom:0}
+.pgh{padding:14px 16px 2px}
+.pgh h4{margin:0;font-size:13px;letter-spacing:.02em;text-transform:uppercase;font-family:var(--mono);font-weight:500;color:var(--accent)}
+.pgh p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.prow{display:grid;grid-template-columns:1fr minmax(0,230px);gap:4px 14px;align-items:start;padding:10px 16px;border-radius:10px}
+.prow:hover{background:var(--panel2)}
+.prow.changed{background:var(--accent-soft)}
+.prow .pk{display:flex;flex-wrap:wrap;align-items:center;gap:7px;font-weight:550;font-size:13.5px;min-height:34px}
+.prow .pc{display:flex;align-items:center;gap:8px;justify-content:flex-end;min-height:34px}
+.prow .pc input[type=text],.prow .pc input[type=number],.prow .pc select{height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel2);font-size:13px;width:100%;color:var(--ink)}
+.prow .pc input[type=range]{accent-color:var(--accent);width:100%}
+.prow .pc .rv{font:12px var(--mono);color:var(--ink2);min-width:34px;text-align:right}
+.prow .pc .ro{font:12.5px var(--mono);color:var(--ink2);text-align:right;line-height:1.35}
+.prow .pw{grid-column:1/-1;margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--muted);max-width:68ch}
+.prow .ms{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.prow .ms label{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);border:1px solid var(--line);border-radius:8px;padding:4px 9px;background:var(--panel2);cursor:pointer}
+.prow .ms label:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.tag{font:500 10px var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:2px 6px;border-radius:5px;border:1px solid var(--line);color:var(--muted);background:var(--panel2);white-space:nowrap}
+.tag.auto{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 35%,transparent);background:var(--accent-soft)}
+.tag.user{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 35%,transparent);background:var(--warn-soft)}
+.tag.fixed{color:var(--info);border-color:color-mix(in srgb,var(--info) 30%,transparent);background:var(--info-soft)}
 .lightbox{position:fixed;inset:0;z-index:70;display:grid;place-items:center;background:rgba(5,12,16,.8);padding:24px;cursor:zoom-out}
 .lightbox img{max-width:100%;max-height:100%;background:#fff;border-radius:12px;padding:12px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:80;font-size:13px}
@@ -487,7 +511,7 @@ const F=(job,p)=>`/api/jobs/${job}/files/${p}`;
 function renderResults(R){const job=S.job,root=$("#results");root.innerHTML="";
  const top=el("div","top");top.innerHTML=`<span class="badge">${R.kind==="sc"?"single-cell":"bulk RNA-seq"}</span><h1 title="${esc(R.name)}">${esc(R.name)}</h1>
   <button class="btn sm" id="codeBtn2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 5l-2 14"/></svg>View code</button>
-  <button class="btn sm" id="tuneBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Adjust & re-run</button>
+  <button class="btn sm" id="tuneBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Parameters</button>
   <a class="btn sm accent" href="${F(job,"report.pdf")}" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>PDF report</a>`;
  root.appendChild(top);top.querySelector("#tuneBtn").onclick=()=>openTune(R);top.querySelector("#codeBtn2").onclick=()=>openCode(S.job);
  $("#chatCtx").textContent=R.name;setChips(R);
@@ -563,8 +587,73 @@ function explorerCard(it,job){const c=el("article","card wide");
  cv.addEventListener("pointerleave",()=>$("#tip").hidden=true);
  c.querySelector("[data-z=reset]").onclick=()=>{view={s:1,x:0,y:0};draw()};return c}
 
-/* adjust & re-run drawer */
-function openTune(R){const P=R.params||{};const scrim=el("div","scrim"),d=el("div","drawer");
+/* parameters panel — every choice, the reason for it, and one Re-analyze button */
+const TAGTXT={auto:"auto",user:"you set",default:"default",data:"from data",fixed:"fixed"};
+const TAGTIP={auto:"Derived from your data",user:"You chose this value",default:"Built-in default",
+ data:"Read from your file or metadata",fixed:"Not adjustable"};
+
+function openTune(R){
+ const panel=R.params_panel;
+ if(!panel||!panel.length)return openTuneLegacy(R);
+ const scrim=el("div","scrim"),d=el("div","drawer wide"),init={},fields={};
+ const opt=(o,v)=>`<option value="${esc(String(o))}" ${String(o)===String(v)?"selected":""}>${esc(String(o))||"— none —"}</option>`;
+
+ const rowHTML=f=>{
+  const id="p_"+f.key,tag=f.type==="fixed"?"fixed":(f.source||"default"),v=f.value;
+  let ctl="",extra="";
+  if(f.type==="fixed")ctl=`<div class="ro">${esc(String(v))}</div>`;
+  else if(f.type==="bool")ctl=`<input type="checkbox" id="${id}" ${v?"checked":""}>`;
+  else if(f.type==="range")ctl=`<input type="range" id="${id}" min="${f.min??0}" max="${f.max??1}" step="${f.step??0.05}" value="${v}"><span class="rv" id="${id}_v">${v}</span>`;
+  else if(f.type==="select")ctl=`<select id="${id}">${(f.options||[]).map(o=>opt(o,v)).join("")}</select>`;
+  else if(f.type==="multiselect"){ctl=`<div class="ro">${(v&&v.length)?esc(v.join(", ")):"none"}</div>`;
+   extra=`<div class="ms" id="${id}">${(f.options||[]).map(o=>`<label><input type="checkbox" value="${esc(String(o))}" ${(v||[]).includes(o)?"checked":""}>${esc(String(o))}</label>`).join("")||'<span class="hint">No other columns available</span>'}</div>`}
+  else if(f.type==="int"||f.type==="float")ctl=`<input type="number" id="${id}" value="${v??""}" ${f.step?`step="${f.step}"`:""} ${f.min!=null?`min="${f.min}"`:""} ${f.max!=null?`max="${f.max}"`:""} placeholder="${esc(f.placeholder||"auto")}">`;
+  else ctl=`<input type="text" id="${id}" value="${esc(v==null?"":String(v))}" placeholder="${esc(f.placeholder||"")}">`;
+  return `<div class="prow" data-row="${f.key}"><div class="pk">${esc(f.label)}<span class="tag ${tag}" title="${esc(TAGTIP[tag]||"")}">${TAGTXT[tag]||tag}</span></div>
+   <div class="pc">${ctl}</div><p class="pw">${esc(f.why||"")}</p>${extra}</div>`};
+
+ const body=panel.map(g=>`<section class="pgroup"><div class="pgh"><h4>${esc(g.title)}</h4>${g.note?`<p>${esc(g.note)}</p>`:""}</div>
+  ${g.fields.map(f=>{if(f.type!=="fixed"&&!f.key.startsWith("_")){init[f.key]=f.value;fields[f.key]=f}return rowHTML(f)}).join("")}</section>`).join("");
+
+ d.innerHTML=`<div class="dh"><h3>Parameters</h3><button class="btn ghost sm" data-x aria-label="Close">✕</button></div>
+  <div class="db">${body}</div>
+  <div class="df"><span class="sp" id="t_count">Nothing changed yet</span><button class="btn" data-x>Close</button><button class="btn accent" id="t_go">Re-analyze</button></div>`;
+ document.body.append(scrim,d);
+ const close=()=>{scrim.remove();d.remove()};scrim.onclick=close;d.querySelectorAll("[data-x]").forEach(b=>b.onclick=close);
+
+ const read=k=>{const f=fields[k],e=d.querySelector("#p_"+k);if(!f)return null;
+  if(f.type==="multiselect")return [...e.querySelectorAll("input:checked")].map(x=>x.value);
+  if(f.type==="bool")return e.checked;
+  if(f.type==="range")return +e.value;
+  if(f.type==="int"||f.type==="float")return e.value===""?null:+e.value;
+  return e.value.trim()};
+ const same=(a,b)=>JSON.stringify(Array.isArray(a)?[...a].sort():(a==null?"":a))===JSON.stringify(Array.isArray(b)?[...b].sort():(b==null?"":b));
+ const changed=()=>Object.keys(fields).filter(k=>!same(read(k),init[k]));
+ const refresh=()=>{const c=changed();
+  Object.keys(fields).forEach(k=>d.querySelector(`[data-row="${k}"]`)?.classList.toggle("changed",c.includes(k)));
+  d.querySelector("#t_count").textContent=c.length?`${c.length} change${c.length>1?"":""} — ${c.map(k=>fields[k].label).join(", ")}`:"Nothing changed yet"};
+
+ d.querySelectorAll(".db input,.db select").forEach(e=>{e.addEventListener("input",refresh);e.addEventListener("change",refresh)});
+ const rs=d.querySelector("#p_resolution");if(rs)rs.oninput=()=>{d.querySelector("#p_resolution_v").textContent=rs.value;refresh()};
+ const fs=d.querySelector("#p_factor"),lvs=(R.params||{}).levels||{};
+ if(fs)fs.onchange=()=>{const lv=lvs[fs.value]||[];
+  const rf=d.querySelector("#p_reference"),al=d.querySelector("#p_alternative");
+  if(rf)rf.innerHTML=lv.map((x,i)=>opt(x,lv[0])).join("");
+  if(al)al.innerHTML=lv.map(x=>opt(x,lv[1])).join("");refresh()};
+
+ d.querySelector("#t_go").onclick=async()=>{
+  const c=changed();if(!c.length){toast("Change a value first — nothing to re-analyze.");return}
+  const p={};c.forEach(k=>{const v=read(k);p[k]=(v===""||(Array.isArray(v)&&!v.length&&!(init[k]||[]).length))?null:v});
+  // the contrast is one decision: changing the factor makes its levels meaningless on their own
+  if(p.factor!==undefined&&fields.reference){p.reference=read("reference");p.alternative=read("alternative")}
+  if(p.reference!==undefined&&p.reference===p.alternative){toast("Reference and compared level must differ.");return}
+  close();const fd=new FormData();fd.append("params",JSON.stringify(p));
+  showRunning(R.kind,"Re-analyzing with your parameters…");
+  const r=await fetch(`/api/rerun/${S.job}`,{method:"POST",body:fd});const j=await r.json();startPoll(j.job,j.kind)};
+}
+
+/* fallback for jobs analyzed before the parameters panel existed */
+function openTuneLegacy(R){const P=R.params||{};const scrim=el("div","scrim"),d=el("div","drawer");
  let body="";
  if(R.kind==="sc"){body=`<div class="form">
   <label>Min genes / cell<input type="number" id="t_min_genes" value="${P.min_genes??""}"></label><label>Max genes / cell<input type="number" id="t_max_genes" value="${P.max_genes??""}"></label>

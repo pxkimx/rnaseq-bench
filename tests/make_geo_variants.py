@@ -1,5 +1,5 @@
 import sys, gzip, pathlib, tarfile, shutil, io, numpy as np, scipy.sparse as sp, scipy.io, h5py, pandas as pd
-sys.path.insert(0, "/home/claude/rnaseq-bench")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from server.demo import simulate_pbmc
 a = simulate_pbmc(); key="sample"
 samples = sorted(a.obs[key].unique())

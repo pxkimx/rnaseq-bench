@@ -1,5 +1,5 @@
 import sys, json, pathlib, shutil, time
-sys.path.insert(0, "/home/claude/rnaseq-bench")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from server.common import Job, run_safely
 from server import sc_pipeline, bulk_pipeline
 from server.io_utils import guess_kind, unpack_archives

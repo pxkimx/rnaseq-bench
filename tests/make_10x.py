@@ -1,6 +1,6 @@
 """Write simulated PBMC as 6 GSM-prefixed 10x v3 triplets + a GEO-style series matrix."""
 import sys, gzip, pathlib, numpy as np, scipy.io, scipy.sparse as sp
-sys.path.insert(0, "/home/claude/rnaseq-bench")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from server.demo import simulate_pbmc
 out = pathlib.Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
 a = simulate_pbmc()

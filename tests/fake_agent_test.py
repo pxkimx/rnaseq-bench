@@ -1,9 +1,9 @@
 import sys, os, json, types, pathlib
-sys.path.insert(0, "/home/claude/rnaseq-bench")
-os.environ["TL_HOME"] = "/home/claude/tl_test/tlhome"; os.environ["ANTHROPIC_API_KEY"] = "sk-test"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+os.environ.setdefault("TL_HOME", os.path.expanduser("~/Library/Application Support/RNAseqBench")); os.environ["ANTHROPIC_API_KEY"] = "sk-test"
 import anthropic
 from server import agent
-JOB = sorted(pathlib.Path("/home/claude/tl_test/tlhome/jobs").iterdir(), key=lambda p: p.stat().st_mtime)[-1].name
+JOB = sorted((pathlib.Path(os.environ["TL_HOME"]) / "jobs").iterdir(), key=lambda p: p.stat().st_mtime)[-1].name
 class Blk:
     def __init__(self, **k): self.__dict__.update(k)
     def model_dump(self): return dict(self.__dict__)
@@ -34,5 +34,5 @@ anthropic.Anthropic = Fake
 out = list(agent.chat("c1", "what changed?", JOB, lambda j, p: {"job": "x"}))
 for o in out: print(o.strip()[:160])
 assert any('"type": "done"' in o for o in out)
-print("agent_umap.png exists:", (pathlib.Path("/home/claude/tl_test/tlhome/jobs")/JOB/"agent_umap.png").exists())
+print("agent_umap.png exists:", (pathlib.Path(os.environ["TL_HOME"]) / "jobs" / JOB / "agent_umap.png").exists())
 print(agent.available_models())

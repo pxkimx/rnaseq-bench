@@ -291,6 +291,7 @@ def run(job: Job, files: list[Path], params: dict):
     removed = int((~keep).sum())
     adata = adata[keep.values].copy()
     sc.pp.filter_genes(adata, min_cells=int(P["min_cells"]))
+    genes_dropped = G0 - adata.n_vars
 
     # ---------------------------------------------------------------- doublets
     n_doublets = 0
@@ -371,7 +372,9 @@ def run(job: Job, files: list[Path], params: dict):
     adata.obsm["X_pca"] = ad_h.obsm["X_pca"]
     adata.uns["pca"] = ad_h.uns["pca"]
     vr = ad_h.uns["pca"]["variance_ratio"]
-    n_pcs = int(P["n_pcs"] or int(np.clip(knee(vr) + 5, 10, 40)))
+    knee_pc = knee(vr)
+    knee_auto = int(np.clip(knee_pc + 5, 10, 40))
+    n_pcs = int(P["n_pcs"] or knee_auto)
     n_pcs = min(n_pcs, n_comps)
     loadings = pd.DataFrame(ad_h.varm["PCs"][:, :3], index=ad_h.var_names, columns=["PC1", "PC2", "PC3"])
 
@@ -679,6 +682,45 @@ def run(job: Job, files: list[Path], params: dict):
     job.download("Cell metadata: QC, cluster, cell type (.csv)", "cell_metadata.csv")
     adata.obs.to_csv(job.root / "cell_metadata.csv")
 
+    # ---------------------------------------------------------------- parameters panel
+    try:
+        _pb = {"note": ""}
+        if pb_info:
+            _ck = pb_info.get("condition_key")
+            _pb = {"sk": pb_info.get("sample_key"), "ck": _ck,
+                   "ref": pb_info.get("ref") or pb_info.get("reference"),
+                   "alt": pb_info.get("alt") or pb_info.get("alternative"),
+                   "covariates": pb_info.get("covariates") or [],
+                   "n_samples": (pb_info.get("all_cells") or {}).get("n_samples"),
+                   "levels": sorted(adata.obs[_ck].astype(str).unique()) if _ck and _ck in adata.obs else [],
+                   "note": ""}
+        elif P["pseudobulk"]:
+            _pb = {"note": "Skipped — no sample column and condition column were found in the cell metadata."}
+        else:
+            _pb = {"note": "Turned off."}
+        job.result["params_panel"] = _panel(params or {}, P, {
+            "obs_columns": job.result["params"]["obs_columns"], "batch_key": batch_key, "nb": nb,
+            "flags": job.result.get("flags") or [],
+            "N0": N0, "G0": G0, "n_cells": adata.n_obs, "removed": removed, "genes_dropped": genes_dropped,
+            "min_g": min_g, "max_g": max_g, "max_mt": round(max_mt, 1), "auto_min": auto_min, "auto_max": auto_max,
+            "auto_mt": round(auto_mt, 1), "has_mt": has_mt, "top_cut": float(top_cut),
+            "n_doublets": n_doublets, "plate_based": plate_based,
+            "n_hvg": n_hvg, "hvg_method": hvg_method, "n_pcs": n_pcs, "n_comps": n_comps,
+            "knee": knee_pc, "knee_auto": knee_auto, "integrated": integrated,
+            "res": res, "res_grid": res_grid, "K": K, "species": species, "pb": _pb})
+        # the effective values, so a re-run reproduces this job and the agent/codegen see what was used
+        job.result["params"].update({
+            "min_cells": int(P["min_cells"]), "n_pcs": n_pcs, "doublets": bool(P["doublets"]),
+            "integrate": bool(P["integrate"]), "pseudobulk": bool(P["pseudobulk"]),
+            "sample_key": _pb.get("sk") or P["sample_key"] or "", "condition_key": _pb.get("ck") or P["condition_key"] or "",
+            "reference": _pb.get("ref") or "", "pb_covariates": P["pb_covariates"] or _pb.get("covariates") or [],
+            "genes": P["genes"] or "", "gsea": bool(P["gsea"]), "celltypist": bool(P["celltypist"]),
+            "celltypist_model": P["celltypist_model"] or "", "pathways": bool(P["pathways"]),
+            "trajectory": bool(P["trajectory"]), "root_cluster": P["root_cluster"] or "", "ccc": bool(P["ccc"]),
+            "subset": P["subset"] or "", "subset_key": P["subset_key"], "subset_from_job": P["subset_from_job"] or ""})
+    except Exception:  # noqa: BLE001
+        log_exc("params panel")
+
     job.result["summary"] = {"cells": adata.n_obs, "clusters": K, "species": species}
     job.method("Input", f"{N0:,} barcodes × {G0:,} genes. Detected species: {species}.")
     job.method("Quality control", f"sc.pp.calculate_qc_metrics; kept cells with {min_g}–{max_g:,} genes, ≤{max_mt:.1f}% mitochondrial counts and top-20-gene share ≤ median + 5 MAD. Genes kept if detected in ≥{P['min_cells']} cells.")
@@ -696,3 +738,177 @@ def run(job: Job, files: list[Path], params: dict):
     job.method("Markers", "sc.tl.rank_genes_groups(method='wilcoxon') vs rest on log-normalized counts, BH-adjusted.")
     job.method("Annotation", "Cluster mean z-scores of a curated panel of ~30 canonical cell-type marker sets, weighted by detection rate. Heuristic; validate with reference mapping.")
     job.result["versions"] = {p: version(p) for p in ["scanpy", "anndata", "numpy", "scipy", "leidenalg", "umap-learn"]}
+
+
+def _panel(params, P, ctx):
+    """Every choice this run made, with the reason it was made (see server/params_spec.py)."""
+    from .params_spec import F, G, real_obs, skipped, src
+    obs = real_obs(ctx["obs_columns"])
+    flags = ctx["flags"]
+    nb, batch_key = ctx["nb"], ctx["batch_key"]
+    groups = []
+
+    if P["subset"]:
+        want = P["subset"] if isinstance(P["subset"], str) else ", ".join(map(str, P["subset"]))
+        groups.append(G("subset", "Sub-clustering", [
+            F("subset", "Cells kept", want, f"You asked to re-cluster only the cells that job {P['subset_from_job']} put in "
+              f"{P['subset_key']} ∈ {{{want}}} — {ctx['n_cells']:,} cells. Everything below was recomputed on this subset, "
+              "because thresholds and highly variable genes that suit a whole tissue are usually wrong for one population.",
+              type="text", source="user"),
+            F("subset_key", "Selected on", P["subset_key"], "Which column of the previous job's cell metadata the selection above refers to.",
+              type="text", source="user")],
+            note="This job is a sub-clustering of an earlier one."))
+
+    groups.append(G("qc", "Quality control", [
+        F("min_genes", "Minimum genes per cell", ctx["min_g"], (
+            f"You set this." if src(params, "min_genes") == "user" else
+            f"Median − 5 MAD of log genes per cell on your data = {ctx['auto_min']:,}, floored at 100.") +
+          " Barcodes below the cut-off are usually empty droplets or debris rather than cells. A fixed number "
+          "(like 200) is common, but the adaptive cut-off adapts to how deeply this experiment was sequenced.",
+          type="int", source=src(params, "min_genes", auto=True), placeholder=str(ctx["auto_min"]), min=0),
+        F("max_genes", "Maximum genes per cell", ctx["max_g"], (
+            "You set this." if src(params, "max_genes") == "user" else
+            f"Median + 5 MAD = {ctx['auto_max']:,} on your data.") +
+          " The upper tail is mostly doublets — two cells in one droplet detect roughly twice the genes. Raise it if a "
+          "real population in your tissue is genuinely larger or more transcriptionally active (hepatocytes, neurons).",
+          type="int", source=src(params, "max_genes", auto=True), placeholder=str(ctx["auto_max"]), min=0),
+        F("max_mt", "Maximum mitochondrial %", ctx["max_mt"], (
+            "You set this." if src(params, "max_mt") == "user" else
+            (f"Median + 3 MAD = {ctx['auto_mt']}%, clamped to the 5–25% range recommended in Single-cell best practices "
+             "(Heumos et al. 2023)." if ctx["has_mt"] else
+             "No mitochondrial genes were found in this matrix (they may have been filtered out already), so no cell was "
+             "removed on this criterion.")) +
+          " A high mitochondrial fraction means the cell lysed and lost cytoplasmic RNA. Dissociation-stressed tissue and "
+          "cardiomyocytes legitimately run higher — raise it rather than lose a population.",
+          type="float", source=src(params, "max_mt", auto=True), step=0.5, min=0, max=100),
+        F("min_cells", "Gene must be detected in ≥ N cells", P["min_cells"],
+          f"Genes seen in fewer than {P['min_cells']} cells carry no usable signal and only add to the multiple-testing "
+          f"burden. {ctx['genes_dropped']:,} of {ctx['G0']:,} genes were dropped here.",
+          type="int", source=src(params, "min_cells"), min=1),
+        F("_top20", "Top-20-gene share cut-off", f"≤ {ctx['top_cut']:.1f}% (median + 5 MAD)",
+          "A cell whose counts are dominated by its 20 most-expressed genes has little library complexity left — usually a "
+          "dying cell or an ambient-RNA barcode. Computed from your data; not adjustable.", type="fixed", source="auto")],
+        note=f"{ctx['removed']:,} of {ctx['N0']:,} barcodes were removed by the cut-offs below."))
+
+    groups.append(G("doublets", "Doublets", [
+        F("doublets", "Remove predicted doublets (Scrublet)", bool(P["doublets"]),
+          (f"Scrublet flagged and removed {ctx['n_doublets']:,} cells." if P["doublets"] and ctx["n_doublets"] else
+           "Skipped: your cells look plate-based (≤ 400 cells per sample with very deep libraries), where droplet doublet "
+           "models do not apply." if ctx["plate_based"] else
+           "Turned off." if not P["doublets"] else "Scrublet ran but flagged no cells.") +
+          " Scrublet simulates artificial doublets from your own cells and flags barcodes that look like them.",
+          type="bool", source=src(params, "doublets", auto=True))]))
+
+    groups.append(G("features", "Normalization and feature selection", [
+        F("_norm", "Normalization", "counts per 10,000, then log1p",
+          "Sequencing depth varies per cell for technical reasons, so counts are rescaled to a common total before log "
+          "transformation (the same as Seurat's LogNormalize). Fixed.", type="fixed"),
+        F("n_hvg", "Highly variable genes", ctx["n_hvg"],
+          f"The {ctx['n_hvg']:,} genes with the most biological variance carry the structure; the rest are mostly noise and "
+          f"slow everything down. Selected with {ctx['hvg_method']}" +
+          (f", computed within each level of {batch_key} so batch-specific genes do not win." if nb > 1 else ".") +
+          " 2,000 is the field default; raise it if you expect subtle, closely related populations.",
+          type="int", source=src(params, "n_hvg"), min=200, max=10000, step=100)]))
+
+    groups.append(G("dimred", "Dimensionality reduction", [
+        F("n_pcs", "Principal components used", ctx["n_pcs"], (
+            "You set this." if src(params, "n_pcs") == "user" else
+            f"The scree curve elbows at PC {ctx['knee']} — the point where each extra component stops explaining much — "
+            f"and 5 are added as a safety margin, clipped to the 10–40 range.") +
+          f" These {ctx['n_pcs']} components (of {ctx['n_comps']} computed) are what the neighbour graph, UMAP and clustering "
+          "actually see. Too few merges populations; too many adds noise.",
+          type="int", source=src(params, "n_pcs", auto=True), placeholder=str(ctx["knee_auto"]), min=2, max=100),
+        F("batch_key", "Batch column", batch_key or "",
+          (f"Auto-detected: '{batch_key}' has {nb} levels across your cells, which looks like the unit cells were captured in."
+           if batch_key and src(params, "batch_key") != "user" else
+           f"You set this to '{batch_key}'." if batch_key else
+           "No column looked like a batch, so no integration was attempted. If your cells came from several runs, name that "
+           "column here — batch effects otherwise show up as clusters."),
+          type="select", source=src(params, "batch_key", auto=bool(batch_key)), options=[""] + obs),
+        F("integrate", "Correct batch effects (Harmony)", bool(P["integrate"]),
+          ("Harmony ran on the PCA and the corrected embedding was used for the graph, UMAP and clusters — so clusters "
+           "reflect cell type rather than which run a cell came from." if ctx["integrated"] else
+           f"Not applied: {'no batch column' if not batch_key else 'only one batch level'}." if nb <= 1 or not batch_key else
+           "Turned off — clusters may partly reflect batch."),
+          type="bool", source=src(params, "integrate")),
+        F("_graph", "Neighbours / UMAP", "n_neighbors 15, min_dist 0.5",
+          "Standard Scanpy settings. UMAP distances between far-apart clusters are not meaningful — read it as a map of "
+          "neighbourhoods, not of magnitudes. Fixed.", type="fixed")]))
+
+    groups.append(G("cluster", "Clustering", [
+        F("resolution", "Leiden resolution", ctx["res"],
+          f"Resolution {ctx['res']} gave {ctx['K']} clusters on your cells. This is the one genuinely subjective choice in "
+          "the analysis: higher splits more finely, lower merges. There is no correct value — check the silhouette figure "
+          f"and the resolution sweep ({', '.join(map(str, ctx['res_grid']))}) and pick the granularity your biology needs.",
+          type="range", source=src(params, "resolution"), min=0.1, max=2, step=0.05),
+        F("_markers", "Marker gene test", "Wilcoxon rank-sum, cluster vs rest, BH-adjusted",
+          "A rank test makes no assumption about the distribution of expression, which single-cell counts violate. Note that "
+          "p-values from clusters defined on the same data are optimistic by construction — rank genes, do not trust the "
+          "exact p. Fixed.", type="fixed")]))
+
+    pb = ctx["pb"]
+    groups.append(G("pseudobulk", "Comparing conditions (sample-level)", [
+        F("pseudobulk", "Run sample-level tests", bool(P["pseudobulk"]),
+          "Cells from one animal are not independent replicates. Counts are summed per sample first, then compared with "
+          "DESeq2 — testing cells directly inflates significance by orders of magnitude.", type="bool",
+          source=src(params, "pseudobulk")),
+        F("sample_key", "Sample column", pb.get("sk") or "",
+          (f"'{pb['sk']}' identifies the biological replicate each cell came from ({pb.get('n_samples', '?')} samples)."
+           if pb.get("sk") else
+           "No column identified the biological replicate, so sample-level tests were skipped. Name it here to enable them."),
+          type="select", source=src(params, "sample_key", auto=bool(pb.get("sk"))), options=[""] + obs),
+        F("condition_key", "Condition column", pb.get("ck") or "",
+          (f"'{pb['ck']}' is the variable being compared." if pb.get("ck") else
+           "No condition column was found, so there was nothing to compare."),
+          type="select", source=src(params, "condition_key", auto=bool(pb.get("ck"))), options=[""] + obs),
+        F("reference", "Reference (baseline) level", pb.get("ref") or "",
+          (f"'{pb['ref']}' is the denominator: a positive log2 fold change means higher in {pb.get('alt', 'the other level')}. "
+           "Picked because it looks like the control." if pb.get("ref") and src(params, "reference") != "user" else
+           f"You set '{pb['ref']}' as the baseline." if pb.get("ref") else
+           "Set once a condition column is chosen."),
+          type="select", source=src(params, "reference", auto=bool(pb.get("ref"))), options=[""] + (pb.get("levels") or [])),
+        F("pb_covariates", "Adjust for", P["pb_covariates"] or pb.get("covariates") or [],
+          ("Nuisance variables held constant while testing the condition — so a difference in "
+           f"{', '.join(pb.get('covariates') or []) or 'batch or sex'} is not read as a treatment effect. "
+           "Only add a covariate that varies within each condition; one confounded with the condition removes the effect "
+           "you are testing for."),
+          type="multiselect", source=src(params, "pb_covariates", auto=bool(pb.get("covariates"))),
+          options=[c for c in obs if c not in (pb.get("sk"), pb.get("ck"))])],
+        note=pb.get("note", "")))
+
+    groups.append(G("addons", "Optional analyses", [
+        F("genes", "Genes of interest", P["genes"] or "",
+          "Your own gene list gets its own UMAP feature panel and a table of where each gene is highest. Empty by default "
+          "because it is specific to your question. Comma-separated symbols.",
+          type="text", source=src(params, "genes"), placeholder="e.g. CD8A, FOXP3, IL2RA"),
+        F("gsea", "GSEA on the pseudobulk comparison", bool(P["gsea"]),
+          "Ranks every gene by the condition comparison and asks which gene sets sit at the ends — it uses the whole ranking "
+          "rather than a significance cut-off, so coordinated small changes still show up. Needs the gene-set files (cached "
+          "after the first online run)." + skipped(flags, "GSEA"), type="bool", source=src(params, "gsea")),
+        F("celltypist", "Automated annotation (CellTypist)", bool(P["celltypist"]),
+          "A reference-trained classifier labels each cell independently of your clustering, which is a useful second "
+          "opinion on the marker-panel labels. Needs to download its model once." + skipped(flags, "CellTypist"),
+          type="bool", source=src(params, "celltypist")),
+        F("celltypist_model", "CellTypist model", P["celltypist_model"] or "",
+          f"Left to CellTypist's default for {ctx['species']} tissue. Name a specific model (e.g. Immune_All_Low.pkl) if your "
+          "tissue has a dedicated one — a mismatched reference produces confident, wrong labels.",
+          type="text", source=src(params, "celltypist_model"), placeholder="auto"),
+        F("pathways", "Pathway activity per population (PROGENy)", bool(P["pathways"]),
+          "Scores 14 signalling pathways from their downstream response genes rather than the pathway members themselves — "
+          "a more reliable readout of whether a pathway is active." + skipped(flags, "Pathway activity"),
+          type="bool", source=src(params, "pathways")),
+        F("trajectory", "Trajectory (PAGA + diffusion pseudotime)", bool(P["trajectory"]),
+          "Orders cells along a continuum and shows which clusters connect. Only meaningful if your populations really are a "
+          "differentiation process — it will happily draw a trajectory through unrelated cell types."
+          + skipped(flags, "Trajectory", "pseudotime"), type="bool", source=src(params, "trajectory")),
+        F("root_cluster", "Trajectory start", P["root_cluster"] or "",
+          ("You chose the starting cluster." if src(params, "root_cluster") == "user" else
+           "Not set, so the least differentiated-looking cluster was used as the root. Pseudotime is entirely relative to "
+           "this choice — set it to your known progenitor cluster if you have one."),
+          type="text", source=src(params, "root_cluster"), placeholder="auto"),
+        F("ccc", "Cell–cell communication (LIANA)", bool(P["ccc"]),
+          "Scores ligand–receptor pairs between populations from co-expression. It is a hypothesis about signalling, not "
+          "evidence that it happens — the two cells must also be in contact in the tissue."
+          + skipped(flags, "communication"), type="bool", source=src(params, "ccc"))],
+        note="Each is skipped with a note rather than failing when its reference data cannot be reached."))
+    return groups
