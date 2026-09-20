@@ -70,10 +70,32 @@ from the Files list) or from any folder containing the input files:
     {', '.join(files[:12])}{' …' if len(files) > 12 else ''}
 Requirements: scanpy, anndata, pandas, numpy, matplotlib, seaborn, pydeseq2 (and harmonypy, leidenalg for single-cell).{(chr(10) + "Also used by the steps below: " + ", ".join(extra_reqs) + ".") if extra_reqs else ""}
 """
-import re, warnings
+import re, os, warnings
+# macOS python.org builds ship no CA certificates and do not read the keychain, so any https download
+# below (gene sets, PROGENy, CollecTRI) would fail with CERTIFICATE_VERIFY_FAILED. Harmless elsewhere.
+try:
+    import certifi
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+    os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
+except ImportError:
+    pass
 import numpy as np, pandas as pd
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import contextlib
+
+
+@contextlib.contextmanager
+def step(name):
+    """Report a step that could not run instead of ending the script.
+
+    The optional analyses below depend on reference data that has to be downloaded, and on there being
+    enough overlap between it and your genes. Either can be missing; the rest of the script still holds.
+    """
+    try:
+        yield
+    except Exception as e:
+        print(f"[skipped] {{name}}: {{type(e).__name__}}: {{e}}")
 warnings.filterwarnings("ignore")
 '''
 
@@ -179,7 +201,7 @@ fig.savefig("volcano.png", dpi=200, bbox_inches="tight")
 hm = vst.loc[sig.nsmallest(50, "padj").index, meta.sort_values(factor).index]
 sns.clustermap(hm, z_score=0, cmap="RdBu_r", center=0, col_cluster=False, figsize=(8, 10)).savefig("heatmap.png", dpi=200)
 '''
-    s += bulk_addons(P, res)
+    s += _guard(bulk_addons(P, res))
     s += '\nprint("done — results and figures are in this folder")\n'
     return s
 
@@ -311,7 +333,7 @@ ds.results_df.sort_values("pvalue").to_csv("pseudobulk_all_cells.csv")
 # Repeat with C restricted to one cell type (adata.obs.cell_type == ...) for per-population tests.
 # Composition: pd.crosstab(adata.obs[sample_key], adata.obs["cell_type"], normalize="index") then Mann-Whitney per column across samples.
 '''
-    s += sc_addons(P, res)
+    s += _guard(sc_addons(P, res))
     s += '\nprint("done — results and figures are in this folder")\n'
     return s
 
@@ -319,6 +341,21 @@ ds.results_df.sort_values("pvalue").to_csv("pseudobulk_all_cells.csv")
 # ------------------------------------------------------------------ expert add-ons
 # Only the add-ons a job actually ran are written into its script, so the script stays a faithful
 # record of that analysis rather than a menu of everything the app can do.
+
+def _guard(text: str) -> str:
+    """Put each numbered add-on step under `with step(...)`, so one that cannot run does not end the run."""
+    import textwrap
+    parts = re.split(r"(?m)^(# -{10,} .*)$", text)
+    out = [parts[0]]
+    for i in range(1, len(parts) - 1, 2):
+        header, body = parts[i], parts[i + 1]
+        title = header.split("---- ", 1)[-1].strip() if "---- " in header else header.strip("# -")
+        body = body.strip("\n")
+        if not body:
+            continue
+        out.append(f'{header}\nwith step("{title}"):\n' + textwrap.indent(body, "    ") + "\n")
+    return "".join(out)
+
 
 def _counter(start):
     c = [start - 1]
@@ -337,7 +374,9 @@ def _goi(P):
 
 
 def bulk_addons(P, res) -> str:
-    s = ""
+    s = ('\n# gene symbols are capitalised differently in mouse and human, which decides which reference\n'
+         '# data below applies\n'
+         'MOUSE = np.mean([bool(re.match(r"^[A-Z][a-z0-9]+$", g)) for g in res.index[:500]]) > .5\n')
     n = _counter(7)          # the fixed part of the bulk script ends at step 6
     pr = res.get("params") or {}
     alt, ref = pr.get("alternative", "alt"), pr.get("reference", "ref")
@@ -367,7 +406,6 @@ if found:
 # Ranks every tested gene by the Wald statistic, then asks which gene sets pile up at either end.
 # Unlike over-representation it uses no significance cut-off, so coordinated small changes still show.
 import gseapy as gp
-MOUSE = np.mean([bool(re.match(r"^[A-Z][a-z0-9]+$", g)) for g in res.index[:500]]) > .5   # symbol casing
 rnk = res.dropna(subset=["stat"])["stat"].sort_values(ascending=False)
 rnk.index = rnk.index.astype(str).str.upper() if MOUSE else rnk.index.astype(str)
 rnk = rnk[~rnk.index.duplicated()]
@@ -392,7 +430,6 @@ fig.tight_layout(); fig.savefig("gsea.png", dpi=200)
 # Footprint methods: score a pathway from the genes it *responds* on (PROGENy) and a transcription
 # factor from its known targets (CollecTRI), rather than from the expression of its own members.
 import decoupler as dc
-MOUSE = np.mean([bool(re.match(r"^[A-Z][a-z0-9]+$", g)) for g in res.index[:500]]) > .5
 stat = res["stat"].dropna()
 stat.index = stat.index.astype(str).str.upper() if MOUSE else stat.index.astype(str)
 stat = stat[~stat.index.duplicated()]
@@ -415,7 +452,8 @@ for name, net, n_show in [("progeny", progeny, 14), ("collectri", collectri, 20)
 
 
 def sc_addons(P, res) -> str:
-    s = ""
+    # CellTypist labels when it ran, Leiden clusters otherwise
+    s = '\nLABEL = "cell_type" if "cell_type" in adata.obs else "leiden"\n'
     n = _counter(8)          # the fixed part of the single-cell script ends at step 7
     goi = _goi(P)
     pb = (res.get("pseudobulk") or {}) if isinstance(res.get("pseudobulk"), dict) else {}
@@ -440,11 +478,6 @@ pred = celltypist.annotate(adata, model=model, majority_voting=True, over_cluste
 adata.obs["cell_type"] = pred.predicted_labels["majority_voting"].astype(str)
 sc.pl.umap(adata, color="cell_type", legend_loc="on data", legend_fontsize=6, show=False, save="_celltypist.png")
 pd.crosstab(adata.obs["leiden"], adata.obs["cell_type"]).to_csv("celltypist_vs_leiden.csv")
-'''
-    if P.get("pathways") or P.get("ccc"):
-        s += '''
-# CellTypist labels when it ran, Leiden clusters otherwise
-LABEL = "cell_type" if "cell_type" in adata.obs else "leiden"
 '''
     if P.get("pathways"):
         s += f'''
