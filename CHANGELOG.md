@@ -36,6 +36,22 @@ Fixes
   anndata require pandas 2, and the rest of the analysis runs on pandas 3. The step says so plainly;
   nothing else is affected.
 - build_mac.sh wrote the versioned zip one directory above the app.
+
+Fixes found by running real GEO data (GSE113957)
+- **Only the first GEO series matrix was read.** A series sequenced on two instruments ships one per
+  platform; the smaller one sorted first, matched almost nothing, and every sample annotation was
+  discarded. All series matrices are now merged.
+- **With no metadata, samples were split into arbitrary halves called A and B** and compared as though
+  that meant something. That split is now refused with instructions, and a name-inferred grouping is
+  flagged for checking rather than reported as fact.
+- **RefSeq gene IDs (NM_/NR_) are now mapped to symbols** (UCSC refGene). Without this, gene sets,
+  PROGENy and CollecTRI matched nothing and reported themselves as skipped.
+- Numeric annotation columns such as `Copies` were analysed as if they were samples.
+- GEO characteristics are free text: ages like `8yr` or `2yr3mos` made the whole column non-numeric, so
+  a continuous variable became a 77-level categorical; `Male`/`male` were separate levels. Both are now
+  cleaned, and the merge is reported.
+- The generated script now sets its own certificate bundle, and each optional step runs under a guard so
+  one unavailable resource prints "[skipped] …" instead of ending the script.
 - Pipeline-derived cell columns (qc_pass, leiden, …) are no longer offered as batch, sample or
   condition columns.
 

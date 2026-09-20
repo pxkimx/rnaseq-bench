@@ -22,6 +22,16 @@ Owner: Paul (biologist, learning the analyses — explain the *why* in plain lan
 ## Conventions / gotchas
 - No `np.cross` on 2-D vectors (NumPy 2.5 errors). pandas 3 is in use (string dtype). Python 3.10–3.13; 3.14 unsupported (harmonypy, scanpy).
 - Anything needing internet (GEO, Enrichr, gene sets, PROGENy, CellTypist) must degrade to an `[info]` flag, never fail the run.
+  That rule covers the generated script too — its optional steps run under `step()` in `codegen.py`.
+- TLS: `server/__init__.py` points SSL_CERT_FILE/REQUESTS_CA_BUNDLE at certifi. The Mac app's python.org build
+  has no CA bundle, so without it every `urllib` download (decoupler/omnipath, UCSC) fails with
+  CERTIFICATE_VERIFY_FAILED while `requests`-based ones (GSEApy) work — a confusing half-offline state.
+- GEO metadata is free text and one series matrix per platform: read them all (`io_utils.read_series_matrices`),
+  clean level capitalisation and units (`unify_level_case`, `numeric_with_units`) before deciding what is
+  continuous. Gene IDs may be Ensembl **or RefSeq** (`map_gene_ids`); unmapped IDs make every gene-set step
+  silently find nothing.
+- Never report an arbitrary grouping as a result: `infer_groups` returns how it guessed, and the A/B fallback
+  is refused rather than analysed.
 - Non-fatal errors: wrap in try/except and call `log_exc("where")` so the traceback lands in the server log.
 - DESeq2: reference level must be first in the Categorical (else lfc_shrink silently does nothing).
 - Cells are not replicates: single-cell DE between conditions is pseudobulk per sample.
