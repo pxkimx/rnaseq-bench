@@ -133,21 +133,38 @@ if [ "$NEED_INSTALL" = 1 ]; then
   log "Packages installed."
 fi
 
-# ---- expert add-ons: best-effort, never fatal
+# ---- expert add-ons: best-effort, never fatal, and never at the cost of the core packages
 if [ "$NEED_OPTIONAL" = 1 ]; then
   note "Installing packages for the expert analyses (GSEA, pathway activity, cell-cell communication)."
-  if [ "$MODE" = terminal ]; then
-    "$VENV/bin/pip" install -r "$OPT_REQ" 2>&1 | tee -a "$LOG" | grep -v "already satisfied"
-  else
-    "$VENV/bin/pip" install -r "$OPT_REQ" >>"$LOG" 2>&1
-  fi
-  if "$VENV/bin/python" -c "import celltypist, decoupler, liana" >>"$LOG" 2>&1; then
+  # Pin what the pipelines run on. Some add-ons (liana, via plotnine) still cap pandas below 3 and would
+  # otherwise silently downgrade a working environment; with these constraints pip refuses that package
+  # instead, and only the analysis that needs it is lost.
+  CONS="$HOME_DIR/.core-constraints.txt"
+  "$VENV/bin/pip" freeze 2>/dev/null \
+    | grep -iE '^(numpy|pandas|scipy|scanpy|anndata|scikit-learn|scikit-image|matplotlib|seaborn|pydeseq2|harmonypy|leidenalg)==' >"$CONS"
+  opt_ok=0; opt_missing=""
+  while IFS= read -r line; do
+    line="${line%%#*}"; line="$(echo "$line" | xargs)"      # strip inline comment and surrounding space
+    [ -n "$line" ] || continue
+    name="$(echo "$line" | sed -E 's/[<>=!~[].*//')"
+    if "$VENV/bin/pip" install -c "$CONS" "$line" >>"$LOG" 2>&1; then
+      opt_ok=$((opt_ok + 1))
+    else
+      opt_missing="$opt_missing $name"
+      log "WARN: $name could not be installed without changing the core packages — skipped."
+    fi
+  done <"$OPT_REQ"
+  if [ -z "$opt_missing" ]; then
     echo "$OPT_SHA" >"$VENV/.optional.sha"
     log "Expert add-on packages installed."
+  elif [ "$opt_ok" -gt 0 ]; then
+    # some installed, the rest genuinely conflict — record it so every launch does not retry a
+    # resolution that cannot succeed; the analyses involved report themselves as skipped
+    echo "$OPT_SHA" >"$VENV/.optional.sha"
+    log "Expert add-ons installed except:$opt_missing — those analyses will report themselves as skipped."
   else
-    # left unrecorded on purpose, so the next launch tries again; the analyses that need these
-    # packages report themselves as skipped rather than failing
-    log "WARN: expert add-on packages are not available — those analyses will report themselves as skipped."
+    # nothing installed at all: most likely offline, so leave it unrecorded and try again next launch
+    log "WARN: no expert add-on packages could be installed (offline?) — will retry on the next launch."
   fi
 fi
 
