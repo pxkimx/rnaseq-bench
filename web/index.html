@@ -660,7 +660,7 @@ function paramsSection(R){
   const p={};c.forEach(k=>{const v=read(k);p[k]=(v===""||(Array.isArray(v)&&!v.length))?null:v});
   // the contrast is one decision: once the factor changes, its levels only make sense together
   if("factor" in p&&fields.reference){p.reference=read("reference");p.alternative=read("alternative")}
-  if(p.reference&&p.reference===p.alternative){toast("Reference and compared level must differ.");return}
+  if(fields.reference&&fields.alternative&&read("reference")===read("alternative")){toast("Reference and compared level must differ.");return}
   const fd=new FormData();fd.append("params",JSON.stringify(p));
   showRunning(R.kind,"Re-analyzing with your parameters…");
   try{const r=await fetch(`/api/rerun/${S.job}`,{method:"POST",body:fd});if(!r.ok)throw new Error(await r.text());
