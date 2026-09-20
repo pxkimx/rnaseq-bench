@@ -329,6 +329,10 @@ def trajectory(job: Job, adata, cluster_key: str = "leiden", label_key: str = "c
 def cell_communication(job: Job, adata, species: str, group_key: str = "cell_type_simple", condition_key: str | None = None) -> bool:
     try:
         import liana as li
+        # an uninstall can leave an empty liana/ directory behind, which python then imports as a
+        # namespace package: the import succeeds and every attribute is missing
+        if not hasattr(li, "mt"):
+            raise ImportError("liana is present but has no usable API (leftover from an uninstall?)")
         key = group_key if group_key in adata.obs else "leiden"
         if adata.obs[key].nunique() < 2:
             return False
