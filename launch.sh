@@ -86,7 +86,16 @@ fi
 log "Python: $PY ($("$PY" --version 2>&1))"
 
 # ---- (re)install packages when the environment is missing or requirements changed
-REQ_SHA="$(shasum -a 256 "$APP_DIR/requirements.txt" | cut -c1-16)"
+# requirements.txt is split at the "--- optional" marker: the core block must install for the app to
+# run at all, the optional block only powers add-ons that degrade to a note, so it is installed
+# best-effort and retried on the next launch rather than blocking startup.
+CORE_REQ="$HOME_DIR/.core-requirements.txt"
+OPT_REQ="$HOME_DIR/.optional-requirements.txt"
+mkdir -p "$HOME_DIR"
+awk '/^# --- optional/{o=1} !o' "$APP_DIR/requirements.txt" >"$CORE_REQ"
+awk '/^# --- optional/{o=1} o'  "$APP_DIR/requirements.txt" >"$OPT_REQ"
+REQ_SHA="$(shasum -a 256 "$CORE_REQ" | cut -c1-16)"
+OPT_SHA="$(shasum -a 256 "$OPT_REQ" | cut -c1-16)"
 # a broken environment (moved folder, wrong chip architecture, deleted base Python) is thrown away and rebuilt
 if [ -d "$VENV" ]; then
   vinfo=$("$VENV/bin/python" -c 'import platform,sys;print(platform.machine(), sys.prefix)' 2>/dev/null) || vinfo=""
@@ -102,6 +111,8 @@ if [ ! -x "$VENV/bin/python" ]; then NEED_INSTALL=1
 elif [ "$(cat "$VENV/.requirements.sha" 2>/dev/null)" != "$REQ_SHA" ]; then NEED_INSTALL=1
 elif ! "$VENV/bin/python" -c "import scanpy, pydeseq2, fastapi, reportlab, anthropic, skimage, openpyxl, harmonypy, leidenalg" >/dev/null 2>&1; then NEED_INSTALL=1
 fi
+NEED_OPTIONAL=0
+[ "$(cat "$VENV/.optional.sha" 2>/dev/null)" = "$OPT_SHA" ] || NEED_OPTIONAL=1
 if [ "$NEED_INSTALL" = 1 ]; then
   if [ ! -x "$VENV/bin/python" ]; then
     note "First launch: installing analysis packages (3–5 minutes)."
@@ -111,15 +122,33 @@ if [ "$NEED_INSTALL" = 1 ]; then
   fi
   if [ "$MODE" = terminal ]; then
     "$VENV/bin/pip" install --upgrade pip 2>&1 | tee -a "$LOG" | grep -v "already satisfied"
-    "$VENV/bin/pip" install -r "$APP_DIR/requirements.txt" 2>&1 | tee -a "$LOG" | grep -v "already satisfied"
+    "$VENV/bin/pip" install -r "$CORE_REQ" 2>&1 | tee -a "$LOG" | grep -v "already satisfied"
   else
     "$VENV/bin/pip" install --upgrade pip >>"$LOG" 2>&1
-    "$VENV/bin/pip" install -r "$APP_DIR/requirements.txt" >>"$LOG" 2>&1
+    "$VENV/bin/pip" install -r "$CORE_REQ" >>"$LOG" 2>&1
   fi
   "$VENV/bin/python" -c "import scanpy, pydeseq2, fastapi, reportlab, anthropic, skimage, openpyxl, harmonypy, leidenalg" >>"$LOG" 2>&1 \
     || { rm -f "$VENV/.requirements.sha"; fail "Installing packages failed. Common causes: no internet, or a Python build without SSL. Details are in the log."; }
   echo "$REQ_SHA" >"$VENV/.requirements.sha"
   log "Packages installed."
+fi
+
+# ---- expert add-ons: best-effort, never fatal
+if [ "$NEED_OPTIONAL" = 1 ]; then
+  note "Installing packages for the expert analyses (GSEA, pathway activity, cell-cell communication)."
+  if [ "$MODE" = terminal ]; then
+    "$VENV/bin/pip" install -r "$OPT_REQ" 2>&1 | tee -a "$LOG" | grep -v "already satisfied"
+  else
+    "$VENV/bin/pip" install -r "$OPT_REQ" >>"$LOG" 2>&1
+  fi
+  if "$VENV/bin/python" -c "import celltypist, decoupler, liana" >>"$LOG" 2>&1; then
+    echo "$OPT_SHA" >"$VENV/.optional.sha"
+    log "Expert add-on packages installed."
+  else
+    # left unrecorded on purpose, so the next launch tries again; the analyses that need these
+    # packages report themselves as skipped rather than failing
+    log "WARN: expert add-on packages are not available — those analyses will report themselves as skipped."
+  fi
 fi
 
 # ---- self-test: the server code must import cleanly with these packages
