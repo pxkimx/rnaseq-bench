@@ -172,6 +172,7 @@ def run(job: Job, files: list[Path], params: dict):
     if adata.uns.get("empty_droplets_removed"):
         notes.append(f"{int(adata.uns['empty_droplets_removed']):,} barcodes with < 200 UMIs (empty droplets from a raw matrix) were dropped before QC.")
     # sub-clustering: keep only cells that a previous job put in the chosen clusters / labels
+    n_subset = None
     if P["subset"] and P["subset_from_job"]:
         try:
             prev = Path(os.environ.get("TL_HOME", ROOT)) / "jobs" / str(P["subset_from_job"]) / "cell_metadata.csv"
@@ -183,6 +184,7 @@ def run(job: Job, files: list[Path], params: dict):
             if m.sum() < 50:
                 raise UserFacingError(f"Only {int(m.sum())} cells match {key} ∈ {want} in job {P['subset_from_job']}.")
             adata = adata[m].copy()
+            n_subset = adata.n_obs
             notes.append(f"Sub-clustering: kept {adata.n_obs:,} cells with {key} in {{{', '.join(want)}}} from job {P['subset_from_job']}; QC, HVGs, PCA and clustering are recomputed on this subset.")
         except UserFacingError:
             raise
@@ -701,7 +703,8 @@ def run(job: Job, files: list[Path], params: dict):
         job.result["params_panel"] = _panel(params or {}, P, {
             "obs_columns": job.result["params"]["obs_columns"], "batch_key": batch_key, "nb": nb,
             "flags": job.result.get("flags") or [],
-            "N0": N0, "G0": G0, "n_cells": adata.n_obs, "removed": removed, "genes_dropped": genes_dropped,
+            "N0": N0, "G0": G0, "n_cells": adata.n_obs, "n_subset": n_subset or N0,
+            "removed": removed, "genes_dropped": genes_dropped,
             "min_g": min_g, "max_g": max_g, "max_mt": round(max_mt, 1), "auto_min": auto_min, "auto_max": auto_max,
             "auto_mt": round(auto_mt, 1), "has_mt": has_mt, "top_cut": float(top_cut),
             "n_doublets": n_doublets, "plate_based": plate_based,
@@ -752,7 +755,8 @@ def _panel(params, P, ctx):
         want = P["subset"] if isinstance(P["subset"], str) else ", ".join(map(str, P["subset"]))
         groups.append(G("subset", "Sub-clustering", [
             F("subset", "Cells kept", want, f"You asked to re-cluster only the cells that job {P['subset_from_job']} put in "
-              f"{P['subset_key']} ∈ {{{want}}} — {ctx['n_cells']:,} cells. Everything below was recomputed on this subset, "
+              f"{P['subset_key']} ∈ {{{want}}} — {ctx['n_subset']:,} cells, of which {ctx['n_cells']:,} passed this job's "
+              "own quality control. Everything below was recomputed on this subset, "
               "because thresholds and highly variable genes that suit a whole tissue are usually wrong for one population.",
               type="text", source="user"),
             F("subset_key", "Selected on", P["subset_key"], "Which column of the previous job's cell metadata the selection above refers to.",
