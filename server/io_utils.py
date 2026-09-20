@@ -668,7 +668,14 @@ def infer_groups(names: list[str]) -> tuple[list[str], str]:
 
 # ---------------------------------------------------------------- metadata hygiene
 _YM = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(?:y|yr|yrs|year|years)\s*(?:(\d+(?:\.\d+)?)\s*(?:m|mo|mos|month|months))?\s*$", re.I)
-_NUM_UNIT = re.compile(r"^\s*[A-Za-z]{0,2}?(\d+(?:\.\d+)?)\s*([A-Za-z%]*)\s*$")
+# A number optionally followed by a unit. Deliberately no letter *prefix*: "GM08399", "AG09599" and "S1"
+# are sample and cell-line identifiers, and reading them as the numbers 8399, 9599 and 1 would offer an
+# identifier as a continuous covariate.
+_NUM_UNIT = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([A-Za-z%]*)\s*$")
+_UNITS = {"", "y", "yr", "yrs", "year", "years", "m", "mo", "mos", "month", "months", "w", "wk", "wks",
+          "week", "weeks", "d", "day", "days", "h", "hr", "hrs", "hour", "hours", "min", "mins", "sec",
+          "dpi", "dpf", "hpf", "dpc", "passage", "p", "ng", "ug", "mg", "g", "kg", "ml", "ul", "l",
+          "nm", "um", "mm", "cm", "gy", "%", "percent", "x", "fold", "c", "k"}
 
 
 def numeric_with_units(col: pd.Series) -> pd.Series | None:
@@ -692,7 +699,7 @@ def numeric_with_units(col: pd.Series) -> pd.Series | None:
             return out
     hit = s.str.extract(_NUM_UNIT)
     units = {u.lower() for u in hit[1].dropna() if u}
-    if hit[0].notna().mean() >= 0.8 and len(units) <= 1:
+    if hit[0].notna().mean() >= 0.8 and len(units) <= 1 and units <= _UNITS:
         return pd.to_numeric(hit[0], errors="coerce")
     return None
 
