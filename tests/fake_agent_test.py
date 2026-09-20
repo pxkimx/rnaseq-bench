@@ -3,7 +3,16 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 os.environ.setdefault("TL_HOME", os.path.expanduser("~/Library/Application Support/RNAseqBench")); os.environ["ANTHROPIC_API_KEY"] = "sk-test"
 import anthropic
 from server import agent
-JOB = sorted((pathlib.Path(os.environ["TL_HOME"]) / "jobs").iterdir(), key=lambda p: p.stat().st_mtime)[-1].name
+# the scripted tool call reads analyzed.h5ad, so pick the most recent *single-cell* job
+def _newest_sc():
+    jobs = sorted((pathlib.Path(os.environ["TL_HOME"]) / "jobs").iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+    for d in jobs:
+        if (d / "analyzed.h5ad").exists():
+            return d.name
+    raise SystemExit("no finished single-cell job in TL_HOME — run one first (tests/run_job.py sc ...)")
+
+
+JOB = _newest_sc()
 class Blk:
     def __init__(self, **k): self.__dict__.update(k)
     def model_dump(self): return dict(self.__dict__)
@@ -34,5 +43,8 @@ anthropic.Anthropic = Fake
 out = list(agent.chat("c1", "what changed?", JOB, lambda j, p: {"job": "x"}))
 for o in out: print(o.strip()[:160])
 assert any('"type": "done"' in o for o in out)
-print("agent_umap.png exists:", (pathlib.Path(os.environ["TL_HOME"]) / "jobs" / JOB / "agent_umap.png").exists())
+png = pathlib.Path(os.environ["TL_HOME"]) / "jobs" / JOB / "agent_umap.png"
+print("agent_umap.png exists:", png.exists())
+assert png.exists(), "run_python did not produce the figure"
+png.unlink()
 print(agent.available_models())

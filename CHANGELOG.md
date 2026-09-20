@@ -1,5 +1,34 @@
 # RNAseq Bench changelog
 
+## 3.2
+New — expert analyses
+- **Bulk**: pre-ranked GSEA (Hallmark, GO BP, KEGG, Reactome); PROGENy pathway and CollecTRI
+  transcription-factor activity, for the contrast and per sample; a genes-of-interest panel;
+  covariate-adjusted PCA.
+- **Single-cell**: static feature plots, UMAP split by condition, cluster→label and label→condition
+  alluvials, CellTypist annotation, PROGENy activity per population, PAGA + diffusion pseudotime,
+  LIANA ligand–receptor analysis, silhouette per resolution, sub-clustering of a previous job's
+  clusters, and GSEA on the pseudobulk comparison.
+
+New — the Parameters section
+- Every analysis now carries a **Parameters** section: each choice the pipeline made, the value it
+  used, where that value came from (derived from your data / chosen by you / built-in default /
+  fixed) and a plain-language reason. Change anything and press **Re-analyze**.
+- Only what you change is sent, so the rest still adapts to your data; clearing a field returns it
+  to automatic.
+- The section is also an appendix in the PDF report, and the assistant reads it before discussing
+  or changing a parameter.
+
+Fixes
+- Choosing a covariate that describes the same split of the samples as the design factor crashed
+  DESeq2 with "Singular matrix". Such columns are now detected before the fit and explained, are
+  not offered as covariates, and are no longer suggested by the PC-association advice.
+- The generated script covers the expert add-ons that a job actually ran, and its requirements line
+  lists the packages they need.
+- The PDF report header said TRANSCRIPT LENS.
+- Pipeline-derived cell columns (qc_pass, leiden, …) are no longer offered as batch, sample or
+  condition columns.
+
 ## 3.1.3
 - No more "running" dialog: the server runs in the background; stop it from the sidebar ("Quit RNAseq Bench") or with "Stop RNAseq Bench.command".
 

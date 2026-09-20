@@ -40,13 +40,24 @@ Ensembl IDs are mapped to symbols (human/mouse, cached after first use).
 **Bulk (PyDESeq2)** — technical-replicate detection and summing, sex inference from XIST/chrY,
 categorical *and continuous* covariates (age, RIN…), design formula you control, DESeq2 with LFC
 shrinkage, VST → PCA, correlation, PC–metadata association (batch detection), dispersion, volcano, MA,
-p-value histogram, heatmap, per-gene counts, Enrichr pathways.
+p-value histogram, heatmap, per-gene counts, Enrichr pathways, pre-ranked **GSEA** (Hallmark, GO BP,
+KEGG, Reactome), **PROGENy** pathway and **CollecTRI** transcription-factor activity for the contrast and
+per sample, and a panel for your own genes of interest.
 
 **Single-cell (Scanpy)** — MAD-based QC, Scrublet (auto-skipped for plate-based data), HVGs, PCA,
 Harmony, UMAP, Leiden with resolution sweep, Wilcoxon markers, marker-panel annotation (immune, tissue and
 vascular panels), interactive UMAP with gene lookup — and when cells carry a sample and a condition,
 **composition tests** and **pseudobulk DESeq2** (all cells and per cell type), so cells are never
-mistaken for replicates.
+mistaken for replicates. Also: feature plots, UMAP split by condition, cluster→label and label→condition
+alluvials, **CellTypist** annotation, **PROGENy** activity per population, **PAGA + diffusion pseudotime**,
+**LIANA** ligand–receptor analysis, silhouette per resolution, GSEA on the pseudobulk comparison, and
+sub-clustering of any cluster from a previous run.
+
+**Parameters** — every analysis ends with a Parameters section listing each choice it made: the value
+used, where it came from (derived from your data, chosen by you, a built-in default, or not adjustable)
+and a plain-language reason. Change anything and press **Re-analyze**; only what you change is overridden,
+so everything else still adapts to your data, and clearing a field returns it to automatic. The same
+account appears as an appendix in the PDF.
 
 **Assistant** — floating *Ask Claude* button. It can read results, list and read files, re-run with new
 parameters, write a corrected metadata file, run Python inside the job folder (custom plots, extra

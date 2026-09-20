@@ -27,13 +27,27 @@ Owner: Paul (biologist, learning the analyses — explain the *why* in plain lan
 - Cells are not replicates: single-cell DE between conditions is pseudobulk per sample.
 - Mac app runs `launch.sh` (arm64 re-exec guard, venv rebuild guard, requirements hash → reinstall).
 
-## v3.2 status (in progress)
-Done & tested on simulated data: bulk GSEA prerank, PROGENy/CollecTRI activity (contrast + per-sample), genes-of-interest,
-covariate-adjusted PCA; sc feature plots, UMAP split by condition, alluvials, CellTypist (needs internet; untested here),
-PROGENy per population, PAGA + DPT, LIANA cell–cell communication, silhouette per resolution, sub-clustering params
-(`subset`, `subset_key`, `subset_from_job`), GSEA on pseudobulk.
-TODO: (1) **Parameters panel** in the UI — list every parameter with the value used and *why* (auto-derived thresholds
-explained), editable, one "Re-analyze" button (extend the tune drawer; sc params in `result.params`, bulk in `result.params`);
-(2) expose new params in the tune drawer + agent `rerun_analysis` description (`genes`, `celltypist_model`, `root_cluster`,
-`subset`, toggles `gsea/activity/celltypist/pathways/trajectory/ccc`); (3) codegen snippets for the add-ons; (4) PDF report
-check with the new sections; (5) requirements: add celltypist, decoupler, liana; (6) run the full tests matrix, then ship.
+## v3.2 status
+Shipped and tested on the synthetic datasets in `tests/`: bulk GSEA prerank, PROGENy/CollecTRI activity
+(contrast + per-sample), genes-of-interest, covariate-adjusted PCA; sc feature plots, UMAP split by condition,
+alluvials, PROGENy per population, PAGA + DPT, LIANA, silhouette per resolution, sub-clustering
+(`subset`, `subset_key`, `subset_from_job`), GSEA on pseudobulk. CellTypist is wired but its model needs
+internet, so it is still untested here.
+
+**Parameters section** (`server/params_spec.py`): each pipeline ends its run by writing
+`result["params_panel"]` — groups of fields, each with `key`, `label`, `value`, `why`, `source`
+(auto / user / default / data) and a control `type`. `web/index.html` renders it generically as the
+"Parameters" report section, and `_panel()` in `sc_pipeline.py` / `bulk_pipeline.py` builds it.
+Rules when you add a parameter:
+- Every editable field's `key` must be a parameter the pipeline's `run(params=...)` accepts, or Re-analyze
+  drops it silently. `type="fixed"` and keys starting with `_` are display-only.
+- The `why` is generated at analysis time and must say what actually happened, not what was requested —
+  use `params_spec.skipped()` for add-ons that were skipped, and name the derivation for `auto` values.
+- The UI sends only the fields you changed; `null` clears one back to automatic (`/api/rerun` merges over
+  the previous job's params). Never send the whole panel back, or auto-derived thresholds become pinned.
+- Column choices come from `params_spec.real_obs()` (drops qc_pass, leiden, …); bulk covariate choices drop
+  columns confounded with the design factor.
+- `result["params"]` still carries the flat values for the agent, codegen and re-runs — keep both updated.
+
+TODO: CellTypist on a real (online) run; RNA velocity (scVelo) is the one publication-checklist item not
+covered, and needs spliced/unspliced counts most datasets do not ship.
