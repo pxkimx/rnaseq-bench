@@ -57,21 +57,38 @@ single-cell RNA-seq pipelines (PyDESeq2 for bulk, Scanpy + Harmony + Leiden + ps
 single-cell). You talk to a scientist who is looking at a results page. Be concise, concrete and honest
 about limits. Explain results in plain language, name genes, quote numbers from the result JSON, and flag
 design problems (confounding, too few replicates, batch). When the user asks to change something, prefer
-re-running with different parameters (rerun_analysis) over ad-hoc code; use run_python for custom plots,
+re-running with different parameters (rerun_analysis) over ad-hoc code — pass only the parameters that change,
+since every other one keeps its previous value; use run_python for custom plots,
 extra statistics, fixing metadata, or anything the pipeline does not offer. Every figure you make with
 run_python should be saved as a PNG in the job folder and mentioned by file name so the UI can show it.
+Each result carries a params_panel: every choice the pipeline made, the value it used, where that value came
+from (auto / user / default) and a plain-language reason. Read it before you discuss or change a parameter, and
+point the user at the Parameters section of the report rather than restating all of it.
 Never invent results — read them with the tools. Keep answers short unless asked for depth."""
 
 TOOLS = [
     {"name": "list_jobs", "description": "List recent analyses with their id, kind, name and status.",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "get_result", "description": "Full result of a finished job: tiles, flags (findings), sections, tables, methods, params. Use this before interpreting anything.",
+    {"name": "get_result", "description": "Full result of a finished job: tiles, flags (findings), sections, tables, methods, params, and params_panel (every parameter with the value used, where it came from and why). Use this before interpreting anything.",
      "input_schema": {"type": "object", "properties": {"job": {"type": "string"}}, "required": ["job"]}},
     {"name": "list_files", "description": "List files in a job folder (inputs, CSV results, figures).",
      "input_schema": {"type": "object", "properties": {"job": {"type": "string"}}, "required": ["job"]}},
     {"name": "read_file", "description": "Read the first N lines of a text/CSV file in a job folder (default 40).",
      "input_schema": {"type": "object", "properties": {"job": {"type": "string"}, "path": {"type": "string"}, "lines": {"type": "integer"}}, "required": ["job", "path"]}},
-    {"name": "rerun_analysis", "description": "Re-run a job with changed parameters (same input files). Bulk params: factor, reference, alternative, covariates (list), alpha, lfc, collapse_replicates (auto/true/false), infer_sex. Single-cell params: min_genes, max_genes, max_mt, n_hvg, resolution, n_pcs, batch_key, doublets, integrate, sample_key, condition_key, pb_covariates (list), reference, pseudobulk. Returns the new job id; poll get_status until done.",
+    {"name": "rerun_analysis", "description": (
+         "Re-run a job with changed parameters (same input files). Pass ONLY the parameters you want to change: "
+         "anything omitted keeps the previous job's value, and passing null returns a parameter to its automatic "
+         "default. get_result's params_panel lists every parameter with the value used and why, which is the best "
+         "guide to what is worth changing.\n"
+         "Bulk: factor, reference, alternative, covariates (list), alpha, lfc, collapse_replicates (auto/true/false), "
+         "infer_sex (bool), groups (comma-separated labels when there is no metadata file), genes (comma-separated "
+         "symbols for a genes-of-interest panel), and the toggles gsea, activity, enrichment.\n"
+         "Single-cell: min_genes, max_genes, max_mt, min_cells, n_hvg, resolution, n_pcs, batch_key, doublets, "
+         "integrate, sample_key, condition_key, pb_covariates (list), reference, pseudobulk, genes, "
+         "celltypist_model, root_cluster (trajectory start), the toggles gsea, celltypist, pathways, trajectory, ccc, "
+         "and for sub-clustering subset (cluster ids or labels), subset_key (default 'leiden') with "
+         "subset_from_job (the job whose cells are being subset).\n"
+         "Returns the new job id; poll get_status until done."),
      "input_schema": {"type": "object", "properties": {"job": {"type": "string"}, "params": {"type": "object"}}, "required": ["job", "params"]}},
     {"name": "get_status", "description": "Progress of a running job (state, pct, message, error).",
      "input_schema": {"type": "object", "properties": {"job": {"type": "string"}}, "required": ["job"]}},
@@ -113,6 +130,10 @@ def run_tool(name: str, inp: dict, start_rerun) -> str:
         if name == "get_result":
             r = json.loads((job / "result.json").read_text())
             slim = {k: r[k] for k in ("kind", "name", "tiles", "flags", "params", "methods", "pseudobulk", "summary") if k in r}
+            # the parameters panel without the UI scaffolding (control type, options, ranges)
+            slim["params_panel"] = [{"group": g["title"], "fields": [
+                {"key": f["key"], "label": f["label"], "value": f["value"], "source": f["source"], "why": f["why"]}
+                for f in g["fields"]]} for g in r.get("params_panel", [])]
             slim["sections"] = [{"id": s["id"], "title": s["title"], "items": [
                 {"type": i["type"], "title": i.get("title"), "yours": i.get("yours"),
                  **({"columns": i["columns"], "rows": i["rows"][:15]} if i["type"] == "table" else {}),

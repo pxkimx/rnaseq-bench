@@ -280,7 +280,16 @@ body.chat-open .fab{display:none}
 .drawer .dh h3{margin:0;font-size:16px;flex:1}
 .drawer .db{overflow:auto;padding:8px 4px}
 .drawer .df{padding:14px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
-.drawer.wide{width:min(760px,100%)}
+.params .pgroup{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);margin-bottom:12px;padding:0 0 8px}
+.params .pgh{padding:14px 18px 6px}
+.params .prow{padding:10px 18px}
+.params .lede .tag{vertical-align:1px}
+.pbar{position:sticky;bottom:0;display:flex;align-items:center;gap:10px;padding:12px 18px;border:1px solid var(--line);border-radius:var(--r);
+ background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:var(--shadow);
+ padding-right:150px}  /* keep the Re-analyze button clear of the floating "Ask Claude" button */
+.pbar span{flex:1;font-size:12.5px;color:var(--muted)}
+.pbar .btn.accent:disabled{opacity:.45;cursor:not-allowed}
+
 .drawer .df .sp{flex:1;font-size:12px;color:var(--muted);align-self:center;text-align:left}
 .pgroup{border-bottom:1px solid var(--line2);padding:2px 0 10px}
 .pgroup:last-child{border-bottom:0}
@@ -513,7 +522,7 @@ function renderResults(R){const job=S.job,root=$("#results");root.innerHTML="";
   <button class="btn sm" id="codeBtn2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 5l-2 14"/></svg>View code</button>
   <button class="btn sm" id="tuneBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Parameters</button>
   <a class="btn sm accent" href="${F(job,"report.pdf")}" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>PDF report</a>`;
- root.appendChild(top);top.querySelector("#tuneBtn").onclick=()=>openTune(R);top.querySelector("#codeBtn2").onclick=()=>openCode(S.job);
+ root.appendChild(top);top.querySelector("#tuneBtn").onclick=()=>{const t=document.getElementById("params")||document.getElementById("methods");if(t)t.scrollIntoView({behavior:"smooth"});else openTune(R)};top.querySelector("#codeBtn2").onclick=()=>openCode(S.job);
  $("#chatCtx").textContent=R.name;setChips(R);
  const tiles=el("div","tiles");tiles.innerHTML=R.tiles.map(t=>`<div class="tile"><b style="${String(t.value).length>10?"font-size:17px":""}">${esc(t.value)}</b><span>${esc(t.label)}</span></div>`).join("");root.appendChild(tiles);
  const ins=el("div","insights");ins.id="summary";ins.innerHTML=`<h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>What your data says</h2>`+R.flags.map(f=>`<div class="insight"><span class="tag ${f.level}">${{ok:"OK",warn:"CHECK",info:"NOTE"}[f.level]}</span><div>${safe(f.text)}</div></div>`).join("");root.appendChild(ins);
@@ -521,6 +530,7 @@ function renderResults(R){const job=S.job,root=$("#results");root.innerHTML="";
  R.sections.forEach((s,i)=>{navItems.push([s.id,s.title.replace(/^Differential expression: /,"DE: ")]);const sec=el("section","sec");sec.id=s.id;
   sec.innerHTML=`<div class="sech"><span class="k">${esc(s.kicker)}</span><h2>${esc(s.title)}</h2></div><p class="lede">${safe(s.lede)}</p>`;const g=el("div","grid");sec.appendChild(g);
   s.items.forEach(it=>{if(it.type==="figure")g.appendChild(figCard(it,job));else if(it.type==="table")g.appendChild(tableCard(it,job));else if(it.type==="explorer")g.appendChild(explorerCard(it,job))});root.appendChild(sec)});
+ if(R.params_panel&&R.params_panel.length){const ps=paramsSection(R);navItems.push(["params","Parameters"]);root.appendChild(ps)}
  const m=el("section","sec");m.id="methods";navItems.push(["methods","Methods"]);m.innerHTML=`<div class="sech"><span class="k">Reproducibility</span><h2>Methods</h2></div><p class="lede">Parameters and software used, ready to adapt for a methods section.</p><div class="methods">${R.methods.map(([h,p])=>`<div><h4>${esc(h)}</h4><p>${safe(p)}</p></div>`).join("")}</div><div class="versions">${Object.entries(R.versions||{}).map(([k,v])=>`<span class="chip">${esc(k)} ${esc(v)}</span>`).join("")}</div>`;root.appendChild(m);
  $("#nav").innerHTML=navItems.map(([id,l],i)=>`<a href="#${id}" data-id="${id}"><i>${i===0?"◎":i===navItems.length-1?"≡":i}</i>${esc(l)}</a>`).join("");
  $$("#nav a").forEach(a=>a.onclick=e=>{e.preventDefault();document.getElementById(a.dataset.id).scrollIntoView({behavior:"smooth"})});
@@ -592,10 +602,11 @@ const TAGTXT={auto:"auto",user:"you set",default:"default",data:"from data",fixe
 const TAGTIP={auto:"Derived from your data",user:"You chose this value",default:"Built-in default",
  data:"Read from your file or metadata",fixed:"Not adjustable"};
 
-function openTune(R){
- const panel=R.params_panel;
- if(!panel||!panel.length)return openTuneLegacy(R);
- const scrim=el("div","scrim"),d=el("div","drawer wide"),init={},fields={};
+function openTune(R){return openTuneLegacy(R)}   /* only reached for jobs without a params_panel */
+
+/* the Parameters section of the report: every choice, why it was made, and one Re-analyze button */
+function paramsSection(R){
+ const panel=R.params_panel,init={},fields={},sec=el("section","sec params");sec.id="params";
  const opt=(o,v)=>`<option value="${esc(String(o))}" ${String(o)===String(v)?"selected":""}>${esc(String(o))||"— none —"}</option>`;
 
  const rowHTML=f=>{
@@ -606,51 +617,57 @@ function openTune(R){
   else if(f.type==="range")ctl=`<input type="range" id="${id}" min="${f.min??0}" max="${f.max??1}" step="${f.step??0.05}" value="${v}"><span class="rv" id="${id}_v">${v}</span>`;
   else if(f.type==="select")ctl=`<select id="${id}">${(f.options||[]).map(o=>opt(o,v)).join("")}</select>`;
   else if(f.type==="multiselect"){ctl=`<div class="ro">${(v&&v.length)?esc(v.join(", ")):"none"}</div>`;
-   extra=`<div class="ms" id="${id}">${(f.options||[]).map(o=>`<label><input type="checkbox" value="${esc(String(o))}" ${(v||[]).includes(o)?"checked":""}>${esc(String(o))}</label>`).join("")||'<span class="hint">No other columns available</span>'}</div>`}
+   extra=`<div class="ms" id="${id}">${(f.options||[]).map(o=>`<label><input type="checkbox" value="${esc(String(o))}" ${(v||[]).includes(o)?"checked":""}>${esc(String(o))}</label>`).join("")||'<span class="hint">No other columns are available to adjust for</span>'}</div>`}
   else if(f.type==="int"||f.type==="float")ctl=`<input type="number" id="${id}" value="${v??""}" ${f.step?`step="${f.step}"`:""} ${f.min!=null?`min="${f.min}"`:""} ${f.max!=null?`max="${f.max}"`:""} placeholder="${esc(f.placeholder||"auto")}">`;
   else ctl=`<input type="text" id="${id}" value="${esc(v==null?"":String(v))}" placeholder="${esc(f.placeholder||"")}">`;
   return `<div class="prow" data-row="${f.key}"><div class="pk">${esc(f.label)}<span class="tag ${tag}" title="${esc(TAGTIP[tag]||"")}">${TAGTXT[tag]||tag}</span></div>
    <div class="pc">${ctl}</div><p class="pw">${esc(f.why||"")}</p>${extra}</div>`};
 
- const body=panel.map(g=>`<section class="pgroup"><div class="pgh"><h4>${esc(g.title)}</h4>${g.note?`<p>${esc(g.note)}</p>`:""}</div>
-  ${g.fields.map(f=>{if(f.type!=="fixed"&&!f.key.startsWith("_")){init[f.key]=f.value;fields[f.key]=f}return rowHTML(f)}).join("")}</section>`).join("");
+ sec.innerHTML=`<div class="sech"><span class="k">Every choice</span><h2>Parameters</h2></div>
+  <p class="lede">What this analysis decided, and why. Values marked <span class="tag auto">auto</span> were derived from your
+   own data, <span class="tag default">default</span> are the field's usual starting points, and <span class="tag fixed">fixed</span>
+   are not adjustable. Change anything below and re-analyze — only what you change is overridden, so the rest still adapts to your data.</p>
+  ${panel.map(g=>`<div class="pgroup"><div class="pgh"><h4>${esc(g.title)}</h4>${g.note?`<p>${esc(g.note)}</p>`:""}</div>
+   ${g.fields.map(f=>{if(f.type!=="fixed"&&!f.key.startsWith("_")){init[f.key]=f.value;fields[f.key]=f}return rowHTML(f)}).join("")}</div>`).join("")}
+  <div class="pbar"><span id="p_count">Nothing changed yet</span><button class="btn" id="p_reset">Undo changes</button><button class="btn accent" id="p_go">Re-analyze</button></div>`;
 
- d.innerHTML=`<div class="dh"><h3>Parameters</h3><button class="btn ghost sm" data-x aria-label="Close">✕</button></div>
-  <div class="db">${body}</div>
-  <div class="df"><span class="sp" id="t_count">Nothing changed yet</span><button class="btn" data-x>Close</button><button class="btn accent" id="t_go">Re-analyze</button></div>`;
- document.body.append(scrim,d);
- const close=()=>{scrim.remove();d.remove()};scrim.onclick=close;d.querySelectorAll("[data-x]").forEach(b=>b.onclick=close);
-
- const read=k=>{const f=fields[k],e=d.querySelector("#p_"+k);if(!f)return null;
+ const q=x=>sec.querySelector(x);
+ const read=k=>{const f=fields[k],e=q("#p_"+k);if(!f||!e)return null;
   if(f.type==="multiselect")return [...e.querySelectorAll("input:checked")].map(x=>x.value);
   if(f.type==="bool")return e.checked;
   if(f.type==="range")return +e.value;
   if(f.type==="int"||f.type==="float")return e.value===""?null:+e.value;
   return e.value.trim()};
- const same=(a,b)=>JSON.stringify(Array.isArray(a)?[...a].sort():(a==null?"":a))===JSON.stringify(Array.isArray(b)?[...b].sort():(b==null?"":b));
- const changed=()=>Object.keys(fields).filter(k=>!same(read(k),init[k]));
+ const norm=v=>JSON.stringify(Array.isArray(v)?[...v].sort():(v==null?"":v));
+ const changed=()=>Object.keys(fields).filter(k=>norm(read(k))!==norm(init[k]));
  const refresh=()=>{const c=changed();
-  Object.keys(fields).forEach(k=>d.querySelector(`[data-row="${k}"]`)?.classList.toggle("changed",c.includes(k)));
-  d.querySelector("#t_count").textContent=c.length?`${c.length} change${c.length>1?"":""} — ${c.map(k=>fields[k].label).join(", ")}`:"Nothing changed yet"};
+  Object.keys(fields).forEach(k=>q(`[data-row="${k}"]`)?.classList.toggle("changed",c.includes(k)));
+  q("#p_reset").hidden=!c.length;
+  q("#p_count").textContent=c.length?`Changed: ${c.map(k=>fields[k].label).join(", ")}`:"Nothing changed yet";
+  q("#p_go").disabled=!c.length};
 
- d.querySelectorAll(".db input,.db select").forEach(e=>{e.addEventListener("input",refresh);e.addEventListener("change",refresh)});
- const rs=d.querySelector("#p_resolution");if(rs)rs.oninput=()=>{d.querySelector("#p_resolution_v").textContent=rs.value;refresh()};
- const fs=d.querySelector("#p_factor"),lvs=(R.params||{}).levels||{};
- if(fs)fs.onchange=()=>{const lv=lvs[fs.value]||[];
-  const rf=d.querySelector("#p_reference"),al=d.querySelector("#p_alternative");
-  if(rf)rf.innerHTML=lv.map((x,i)=>opt(x,lv[0])).join("");
-  if(al)al.innerHTML=lv.map(x=>opt(x,lv[1])).join("");refresh()};
+ sec.querySelectorAll("input,select").forEach(e=>{e.addEventListener("input",refresh);e.addEventListener("change",refresh)});
+ const rs=q("#p_resolution");if(rs)rs.addEventListener("input",()=>q("#p_resolution_v").textContent=rs.value);
+ const fs=q("#p_factor"),lvs=(R.params||{}).levels||{};
+ if(fs)fs.addEventListener("change",()=>{const lv=lvs[fs.value]||[];
+  const rf=q("#p_reference"),al=q("#p_alternative");
+  if(rf)rf.innerHTML=lv.map(x=>opt(x,lv[0])).join("");
+  if(al)al.innerHTML=lv.map(x=>opt(x,lv[1])).join("");refresh()});
 
- d.querySelector("#t_go").onclick=async()=>{
-  const c=changed();if(!c.length){toast("Change a value first — nothing to re-analyze.");return}
-  const p={};c.forEach(k=>{const v=read(k);p[k]=(v===""||(Array.isArray(v)&&!v.length&&!(init[k]||[]).length))?null:v});
-  // the contrast is one decision: changing the factor makes its levels meaningless on their own
-  if(p.factor!==undefined&&fields.reference){p.reference=read("reference");p.alternative=read("alternative")}
-  if(p.reference!==undefined&&p.reference===p.alternative){toast("Reference and compared level must differ.");return}
-  close();const fd=new FormData();fd.append("params",JSON.stringify(p));
+ q("#p_reset").onclick=()=>{renderResults(R);document.getElementById("params")?.scrollIntoView()};
+ q("#p_go").onclick=async()=>{
+  const c=changed();if(!c.length)return;
+  const p={};c.forEach(k=>{const v=read(k);p[k]=(v===""||(Array.isArray(v)&&!v.length))?null:v});
+  // the contrast is one decision: once the factor changes, its levels only make sense together
+  if("factor" in p&&fields.reference){p.reference=read("reference");p.alternative=read("alternative")}
+  if(p.reference&&p.reference===p.alternative){toast("Reference and compared level must differ.");return}
+  const fd=new FormData();fd.append("params",JSON.stringify(p));
   showRunning(R.kind,"Re-analyzing with your parameters…");
-  const r=await fetch(`/api/rerun/${S.job}`,{method:"POST",body:fd});const j=await r.json();startPoll(j.job,j.kind)};
-}
+  try{const r=await fetch(`/api/rerun/${S.job}`,{method:"POST",body:fd});if(!r.ok)throw new Error(await r.text());
+   const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError("Could not start the re-analysis: "+e.message)}};
+
+ setTimeout(refresh,0);
+ return sec}
 
 /* fallback for jobs analyzed before the parameters panel existed */
 function openTuneLegacy(R){const P=R.params||{};const scrim=el("div","scrim"),d=el("div","drawer");

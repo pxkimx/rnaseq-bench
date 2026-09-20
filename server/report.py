@@ -50,7 +50,7 @@ def build_pdf(root: Path):
     width = W - 2 * margin
     story = []
 
-    story += [Paragraph("TRANSCRIPT LENS · " + ("SINGLE-CELL RNA-SEQ" if res["kind"] == "sc" else "BULK RNA-SEQ") + " REPORT", S["kicker"]),
+    story += [Paragraph("RNASEQ BENCH · " + ("SINGLE-CELL RNA-SEQ" if res["kind"] == "sc" else "BULK RNA-SEQ") + " REPORT", S["kicker"]),
               Paragraph(clean(res["name"]), S["title"]), Spacer(1, 3),
               Paragraph(datetime.now().strftime("Generated %d %B %Y, %H:%M"), S["muted"]), Spacer(1, 10)]
 
@@ -115,6 +115,31 @@ def build_pdf(root: Path):
                 story.append(Spacer(1, 12))
             elif it["type"] == "explorer":
                 pass
+
+    if res.get("params_panel"):
+        story += [PageBreak(), Paragraph("PARAMETERS", S["kicker"]), Paragraph("Every choice, and why it was made", S["h1"]),
+                  Paragraph("Values marked <i>auto</i> were derived from this dataset, <i>you set</i> were chosen by hand, "
+                            "<i>default</i> are the built-in starting points and <i>fixed</i> are not adjustable.", S["muted"]),
+                  Spacer(1, 8)]
+        src_label = {"auto": "auto", "user": "you set", "default": "default", "data": "from data", "fixed": "fixed"}
+        for g in res["params_panel"]:
+            rows = []
+            for f in g["fields"]:
+                v = f["value"]
+                v = ", ".join(map(str, v)) if isinstance(v, list) else ("yes" if v is True else "no" if v is False else str(v))
+                tag = "fixed" if f["type"] == "fixed" else f.get("source", "default")
+                rows.append([Paragraph(f"<b>{clean(f['label'])}</b><br/><font size=6.5 color='#5b6b75'>{src_label.get(tag, tag)}</font>", S["cell"]),
+                             Paragraph(clean(v or "—"), S["cell"]),
+                             Paragraph(clean(f["why"]), S["cell"])])
+            t = Table(rows, colWidths=[width * 0.22, width * 0.16, width * 0.62])
+            t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LINEBELOW", (0, 0), (-1, -2), 0.3, LINE),
+                                   ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                                   ("LEFTPADDING", (0, 0), (0, -1), 0)]))
+            block = [Paragraph(clean(g["title"]), S["h2"])]
+            if g.get("note"):
+                block.append(Paragraph(clean(g["note"]), S["sub"]))
+            block += [Spacer(1, 3), t, Spacer(1, 10)]
+            story.append(KeepTogether(block))
 
     story += [PageBreak(), Paragraph("METHODS", S["kicker"]), Paragraph("How this analysis was computed", S["h1"])]
     for h, p in res["methods"]:

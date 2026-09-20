@@ -3,6 +3,7 @@ plain Scanpy / PyDESeq2 calls and the exact parameters that were used."""
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -162,8 +163,9 @@ fig.savefig("volcano.png", dpi=200, bbox_inches="tight")
 # ------------------------------------------------------------------ 6. heatmap of top genes
 hm = vst.loc[sig.nsmallest(50, "padj").index, meta.sort_values(factor).index]
 sns.clustermap(hm, z_score=0, cmap="RdBu_r", center=0, col_cluster=False, figsize=(8, 10)).savefig("heatmap.png", dpi=200)
-print("done: deseq2_results.csv, pca.png, correlation.png, volcano.png, heatmap.png")
 '''
+    s += bulk_addons(P, res)
+    s += '\nprint("done — results and figures are in this folder")\n'
     return s
 
 
@@ -294,5 +296,191 @@ ds.results_df.sort_values("pvalue").to_csv("pseudobulk_all_cells.csv")
 # Repeat with C restricted to one cell type (adata.obs.cell_type == ...) for per-population tests.
 # Composition: pd.crosstab(adata.obs[sample_key], adata.obs["cell_type"], normalize="index") then Mann-Whitney per column across samples.
 '''
-    s += '\nprint("done")\n'
+    s += sc_addons(P, res)
+    s += '\nprint("done — results and figures are in this folder")\n'
+    return s
+
+
+# ------------------------------------------------------------------ expert add-ons
+# Only the add-ons a job actually ran are written into its script, so the script stays a faithful
+# record of that analysis rather than a menu of everything the app can do.
+
+def _counter(start):
+    c = [start - 1]
+
+    def nxt():
+        c[0] += 1
+        return c[0]
+    return nxt
+
+
+def _goi(P):
+    g = P.get("genes")
+    if not g:
+        return []
+    return [x for x in re.split(r"[,\s;]+", str(g) if not isinstance(g, list) else ",".join(g)) if x]
+
+
+def bulk_addons(P, res) -> str:
+    s = ""
+    n = _counter(7)          # the fixed part of the bulk script ends at step 6
+    pr = res.get("params") or {}
+    alt, ref = pr.get("alternative", "alt"), pr.get("reference", "ref")
+    goi = _goi(P)
+    if goi:
+        s += f'''
+# ------------------------------------------------------------------ {n()}. genes of interest
+# Normalized counts per sample for the genes you asked about, whatever their significance.
+goi = {goi!r}
+norm = pd.DataFrame(dds.layers["normed_counts"], index=dds.obs_names, columns=dds.var_names).T
+found = [g for g in goi if g in norm.index]
+if found:
+    d = norm.loc[found]
+    fig, axs = plt.subplots(1, len(found), figsize=(2.3 * len(found), 3.2), squeeze=False)
+    for ax, g in zip(axs[0], found):
+        for i, lv in enumerate(meta[factor].unique()):
+            y = d.loc[g, meta.index[meta[factor] == lv]]
+            ax.scatter(np.random.normal(i, .06, len(y)), y, s=18)
+        ax.set_xticks(range(meta[factor].nunique())); ax.set_xticklabels(meta[factor].unique(), rotation=30, fontsize=7)
+        ax.set_title(g, fontsize=9); ax.set_ylabel("normalized counts" if g == found[0] else "")
+    fig.tight_layout(); fig.savefig("genes_of_interest.png", dpi=200)
+    res.loc[found].to_csv("genes_of_interest.csv")
+'''
+    if P.get("gsea", True):
+        s += f'''
+# ------------------------------------------------------------------ {n()}. GSEA (pre-ranked)
+# Ranks every tested gene by the Wald statistic, then asks which gene sets pile up at either end.
+# Unlike over-representation it uses no significance cut-off, so coordinated small changes still show.
+import gseapy as gp
+MOUSE = np.mean([bool(re.match(r"^[A-Z][a-z0-9]+$", g)) for g in res.index[:500]]) > .5   # symbol casing
+rnk = res.dropna(subset=["stat"])["stat"].sort_values(ascending=False)
+rnk.index = rnk.index.astype(str).str.upper() if MOUSE else rnk.index.astype(str)
+rnk = rnk[~rnk.index.duplicated()]
+rnk.to_csv("ranked_genes.rnk", sep="\\t", header=False)
+# gene_sets accepts an Enrichr library name (downloads once) or a local .gmt path
+pre = gp.prerank(rnk=rnk, gene_sets="MSigDB_Hallmark_2020", permutation_num=1000,
+                 min_size=15, max_size=500, threads=4, seed=0, outdir=None, no_plot=True, verbose=False)
+gsea_res = pre.res2d.copy()
+for c in ("NES", "FDR q-val", "NOM p-val"):
+    gsea_res[c] = pd.to_numeric(gsea_res[c], errors="coerce")
+gsea_res.sort_values("FDR q-val").to_csv("gsea_results.csv", index=False)
+top = gsea_res.reindex(gsea_res["NES"].abs().sort_values(ascending=False).index).head(14).iloc[::-1]
+fig, ax = plt.subplots(figsize=(7, 5))
+ax.barh(range(len(top)), top["NES"], color=["#c9304f" if v > 0 else "#2a64b0" for v in top["NES"]])
+ax.set_yticks(range(len(top))); ax.set_yticklabels([t[:46] for t in top["Term"]], fontsize=7.5)
+ax.axvline(0, color="#444", lw=.8); ax.set_xlabel("NES (positive = enriched in {alt})")
+fig.tight_layout(); fig.savefig("gsea.png", dpi=200)
+'''
+    if P.get("activity", True):
+        s += f'''
+# ------------------------------------------------------------------ {n()}. pathway and TF activity (decoupler)
+# Footprint methods: score a pathway from the genes it *responds* on (PROGENy) and a transcription
+# factor from its known targets (CollecTRI), rather than from the expression of its own members.
+import decoupler as dc
+MOUSE = np.mean([bool(re.match(r"^[A-Z][a-z0-9]+$", g)) for g in res.index[:500]]) > .5
+stat = res["stat"].dropna()
+stat.index = stat.index.astype(str).str.upper() if MOUSE else stat.index.astype(str)
+stat = stat[~stat.index.duplicated()]
+mat = pd.DataFrame([stat.values], index=["{alt} vs {ref}"], columns=stat.index)
+organism = "mouse" if MOUSE else "human"
+progeny = dc.op.progeny(organism=organism, top=500)
+collectri = dc.op.collectri(organism=organism)
+for name, net, n_show in [("progeny", progeny, 14), ("collectri", collectri, 20)]:
+    es, pv = dc.mt.ulm(data=mat, net=net, tmin=5)
+    sc_ = es.iloc[0]
+    sc_ = sc_.reindex(sc_.abs().sort_values(ascending=False).index).head(n_show).sort_values()
+    fig, ax = plt.subplots(figsize=(5.8, .28 * len(sc_) + 1.4))
+    ax.barh(range(len(sc_)), sc_.values, color=["#c9304f" if v > 0 else "#2a64b0" for v in sc_.values])
+    ax.set_yticks(range(len(sc_))); ax.set_yticklabels(sc_.index, fontsize=8.5)
+    ax.axvline(0, color="#444", lw=.8); ax.set_xlabel("activity (ULM t-value), positive = up in {alt}")
+    fig.tight_layout(); fig.savefig(f"activity_{{name}}.png", dpi=200)
+    es.T.to_csv(f"activity_{{name}}.csv")
+'''
+    return s
+
+
+def sc_addons(P, res) -> str:
+    s = ""
+    n = _counter(8)          # the fixed part of the single-cell script ends at step 7
+    goi = _goi(P)
+    pb = (res.get("pseudobulk") or {}) if isinstance(res.get("pseudobulk"), dict) else {}
+
+    if goi:
+        s += f'''
+# ------------------------------------------------------------------ {n()}. genes of interest
+goi = [g for g in {goi!r} if g in adata.var_names]
+if goi:
+    sc.pl.umap(adata, color=goi, cmap="viridis", ncols=4, show=False, save="_genes_of_interest.png")
+'''
+    if P.get("celltypist"):
+        s += f'''
+# ------------------------------------------------------------------ {n()}. automated annotation (CellTypist)
+# A reference-trained classifier: a second opinion on the marker-panel labels, independent of clustering.
+# Downloads its model once. Pick a model that matches your tissue — a mismatched reference is confidently wrong.
+import celltypist
+from celltypist import models
+model = {(P.get("celltypist_model") or "Immune_All_Low.pkl")!r}
+models.download_models(model=[model], force_update=False)
+pred = celltypist.annotate(adata, model=model, majority_voting=True, over_clustering="leiden")
+adata.obs["cell_type"] = pred.predicted_labels["majority_voting"].astype(str)
+sc.pl.umap(adata, color="cell_type", legend_loc="on data", legend_fontsize=6, show=False, save="_celltypist.png")
+pd.crosstab(adata.obs["leiden"], adata.obs["cell_type"]).to_csv("celltypist_vs_leiden.csv")
+'''
+    if P.get("pathways") or P.get("ccc"):
+        s += '''
+# CellTypist labels when it ran, Leiden clusters otherwise
+LABEL = "cell_type" if "cell_type" in adata.obs else "leiden"
+'''
+    if P.get("pathways"):
+        s += f'''
+# ------------------------------------------------------------------ {n()}. pathway activity per population (PROGENy)
+import decoupler as dc
+organism = "mouse" if adata.var_names.str.match(r"^[A-Z][a-z]").mean() > .5 else "human"
+progeny = dc.op.progeny(organism=organism, top=500)
+dc.mt.ulm(data=adata, net=progeny, tmin=5)           # writes adata.obsm["score_ulm"]
+acts = dc.pp.get_obsm(adata, "score_ulm")
+mean_by = pd.DataFrame(acts.X, index=adata.obs_names, columns=acts.var_names).groupby(
+    adata.obs[LABEL].values, observed=True).mean()
+import seaborn as sns
+sns.clustermap(mean_by, cmap="RdBu_r", center=0, z_score=1, figsize=(7, 5)).savefig("progeny_by_population.png", dpi=200)
+mean_by.to_csv("progeny_by_population.csv")
+'''
+    if P.get("trajectory"):
+        root = P.get("root_cluster")
+        s += f'''
+# ------------------------------------------------------------------ {n()}. trajectory: PAGA + diffusion pseudotime
+# PAGA summarizes which clusters are connected in the neighbour graph; DPT orders cells along it.
+# Only meaningful if these populations really are a continuum — it will draw a path through anything.
+sc.tl.paga(adata, groups="leiden")
+sc.pl.paga(adata, threshold=.05, show=False, save="_paga.png")
+sc.tl.diffmap(adata)
+root = {root!r} or adata.obs["leiden"].value_counts().idxmax()
+adata.uns["iroot"] = int(np.flatnonzero((adata.obs["leiden"] == str(root)).values)[0])
+sc.tl.dpt(adata)
+sc.pl.umap(adata, color=["leiden", "dpt_pseudotime"], show=False, save="_pseudotime.png")
+'''
+    if P.get("ccc"):
+        s += f'''
+# ------------------------------------------------------------------ {n()}. cell-cell communication (LIANA)
+# Scores ligand-receptor pairs between populations from co-expression. A hypothesis about signalling,
+# not evidence of it: the two populations must also be in contact in the tissue.
+import liana as li
+li.mt.rank_aggregate(adata, groupby=LABEL, expr_prop=.1, use_raw=False, verbose=False)
+lr = adata.uns["liana_res"]
+lr.sort_values("magnitude_rank").to_csv("ligand_receptor.csv", index=False)
+li.pl.dotplot(adata, colour="magnitude_rank", size="specificity_rank", inverse_colour=True,
+              inverse_size=True, top_n=20, orderby="magnitude_rank", orderby_ascending=True,
+              figure_size=(9, 7)).save("ligand_receptor.png")
+'''
+    if P.get("gsea", True) and pb:
+        s += f'''
+# ------------------------------------------------------------------ {n()}. GSEA on the pseudobulk comparison
+import gseapy as gp
+rnk = ds.results_df.dropna(subset=["stat"])["stat"].sort_values(ascending=False)
+rnk.index = rnk.index.astype(str)
+rnk = rnk[~rnk.index.duplicated()]
+pre = gp.prerank(rnk=rnk, gene_sets="MSigDB_Hallmark_2020", permutation_num=1000, min_size=15,
+                 max_size=500, threads=4, seed=0, outdir=None, no_plot=True, verbose=False)
+pre.res2d.sort_values("FDR q-val").to_csv("gsea_pseudobulk.csv", index=False)
+'''
     return s
