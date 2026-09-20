@@ -1,0 +1,57 @@
+# RNAseq Bench changelog
+
+## 3.1.3
+- No more "running" dialog: the server runs in the background; stop it from the sidebar ("Quit RNAseq Bench") or with "Stop RNAseq Bench.command".
+
+## 3.1.2
+- The .app declares arm64 (LSArchitecturePriority) and the launcher re-executes natively if macOS started it under Rosetta — this was why package installs from the app tried to compile Intel wheels.
+
+## 3.1.1
+- Launcher: rebuilds a broken package environment instead of failing; only uses a Python matching the Mac's chip (no Rosetta builds); the rename no longer moves the venv.
+
+## 3.1
+- Renamed to **RNAseq Bench** (was Transcript Lens). Existing analyses, packages and the API key are
+  moved automatically to ~/Library/Application Support/RNAseqBench and ~/.rnaseq-bench on first launch.
+
+## 3.0.1
+- Python 3.13 supported (tested); 3.14 explicitly rejected with an explanation (no harmonypy wheel, scanpy import error).
+
+## 3.0 — rebuilt and re-tested from a clean install
+Fixes
+- Single-cell runs crashed at "Scaling and PCA" with *"Both input arrays must be (arrays of) 3-dimensional
+  vectors"* on current NumPy (2.5+): the PCA knee finder used np.cross on 2-D points. Rewritten.
+- Scrublet was silently skipped on fresh installs (needs scikit-image) — now installed; every skipped step
+  is logged with its traceback.
+- LFC shrinkage silently did nothing whenever the alternative level sorted before the reference
+  (e.g. HGPS vs WT); the reference level is now the baseline of the design in bulk, pseudobulk and scripts.
+- featureCounts-style tables (Chr/Start/End/Strand/Length columns) were mis-detected as single-cell and
+  then failed to parse; type detection now looks at sequencing depth and column names, not column count.
+- Generated scripts: multi-sample 10x loading, per-sample sheet (sample_metadata.csv), samples without a
+  factor value dropped, reference baseline — the bulk script now reproduces the app's numbers exactly.
+GEO import
+- RAW.tar handled recursively (per-sample .tar.gz, per-sample folders, junk files ignored); per-sample 10x
+  triplets / .h5 / .csv.gz / HTSeq count files are stacked and named by their GSM prefix.
+- Series-matrix annotations join onto stacked samples through the GSM prefix, so genotype/treatment
+  columns are available for pseudobulk without extra files.
+- .xlsx count tables, transposed tables, comment lines and odd encodings are read; empty droplets are
+  dropped early when a raw (unfiltered) matrix is given.
+- Download progress in MB; better pre-ticked files; certificate fallback; clear error messages.
+App
+- Launcher rewritten: detects an older running copy and replaces it, re-installs packages when
+  requirements change, self-tests the install, writes a log. "Run self-test.command" added.
+- Settings: "Test key & list models" — the model list comes from your key; retired models fall back.
+- Failed runs show a "Technical details" panel with traceback + package versions.
+
+## 2.3
+- Failed analyses now show a 'Technical details' panel with the full traceback and package versions (Copy button).
+
+## 2.2
+- 10x matrix loading fixed: reads matrix/features|genes/barcodes directly (gzipped or not, any file names);
+  multiple GSM-prefixed samples are stacked with the prefix stored as `sample`.
+- Version number shown in the sidebar and in the app/zip name.
+
+## 2.1
+- GEO import: falls back to certifi root certificates (macOS python.org builds); shows the real network error.
+
+## 2.0
+- Standalone app: modern UI, GEO import, Claude assistant, code viewer, PDF reports, Mac app bundle.

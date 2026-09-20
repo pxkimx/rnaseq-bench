@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RNAseq Bench</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%230f766e'/><circle cx='11' cy='13' r='3' fill='%23a7f3d0'/><circle cx='20' cy='18' r='4' fill='%23fcd34d'/><circle cx='14' cy='21' r='2' fill='%23fda4af'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f3f5f6; --bg2:#e9eef0; --panel:#ffffff; --panel2:#f8fafb; --ink:#0d1b22; --ink2:#33454f; --muted:#6a7b84; --line:#dde4e8; --line2:#eef2f4;
+  --accent:#0f766e; --accent2:#14b8a6; --accent-soft:#e0f4f1; --accent-ink:#ffffff;
+  --warn:#b45309; --warn-soft:#fdf0dc; --info:#3056a8; --info-soft:#e7eefb; --up:#c9304f; --down:#2a64b0;
+  --glow:rgba(20,184,166,.18); --shadow:0 1px 2px rgba(13,27,34,.04),0 8px 24px -12px rgba(13,27,34,.12);
+  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b1115; --bg2:#0f171c; --panel:#121b21; --panel2:#162129; --ink:#e4ecef; --ink2:#b8c6cc; --muted:#83959d; --line:#22313a; --line2:#1a262d;
+  --accent:#2dd4bf; --accent2:#5eead4; --accent-soft:#12302e; --accent-ink:#04201d;
+  --warn:#f5b454; --warn-soft:#33250f; --info:#8fb0f5; --info-soft:#18233a; --up:#f27a92; --down:#6ea8f0;
+  --glow:rgba(45,212,191,.14); --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 30px -14px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#0b1115; --bg2:#0f171c; --panel:#121b21; --panel2:#162129; --ink:#e4ecef; --ink2:#b8c6cc; --muted:#83959d; --line:#22313a; --line2:#1a262d;
+  --accent:#2dd4bf; --accent2:#5eead4; --accent-soft:#12302e; --accent-ink:#04201d;
+  --warn:#f5b454; --warn-soft:#33250f; --info:#8fb0f5; --info-soft:#18233a; --up:#f27a92; --down:#6ea8f0;
+  --glow:rgba(45,212,191,.14); --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 30px -14px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--mono)}
+[hidden]{display:none!important}
+
+/* shell */
+.shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100%}
+aside.side{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;padding:18px 14px;gap:18px;overflow:auto}
+.logo{display:flex;align-items:center;gap:10px;padding:2px 6px;text-decoration:none;color:var(--ink)}
+.logo svg{flex:none}
+.logo b{font-weight:650;font-size:16px;letter-spacing:-.02em}
+.logo small{display:block;font:500 10.5px var(--mono);color:var(--muted);letter-spacing:.02em}
+.navlabel{font:500 10.5px var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:0 8px;margin-bottom:6px}
+.nav a{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;color:var(--ink2);text-decoration:none;font-weight:500}
+.nav a:hover{background:var(--bg2);color:var(--ink)}
+.nav a.on{background:var(--accent-soft);color:var(--accent)}
+.nav a i{width:18px;height:18px;border-radius:6px;display:grid;place-items:center;font:600 10px var(--mono);font-style:normal;background:var(--bg2);color:var(--muted)}
+.nav a.on i{background:var(--accent);color:var(--accent-ink)}
+.dl a{display:flex;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:8px;text-decoration:none;color:var(--ink2);font-size:13px}
+.dl a:hover{background:var(--bg2)}
+.dl a span:last-child{color:var(--muted);font:11px var(--mono)}
+.side .foot{margin-top:auto;display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px;padding:0 6px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-weight:550;cursor:pointer;text-decoration:none;color:var(--ink);white-space:nowrap;transition:border-color .15s,background .15s,transform .05s}
+.btn:hover{border-color:var(--muted)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.primary:hover{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.accent{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--bg2)}
+.btn.sm{height:30px;padding:0 10px;font-size:13px;border-radius:8px}
+.btn svg{width:16px;height:16px}
+main{min-width:0;padding:0 32px 64px}
+@media (max-width:900px){.shell{grid-template-columns:1fr}aside.side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px 16px}aside.side #navWrap,aside.side .dlwrap,aside.side .foot{display:none}aside.side #toolsWrap{margin-left:auto}aside.side #toolsWrap .navlabel{display:none}aside.side #toolsWrap .nav{flex-direction:row;gap:4px}main{padding:0 16px 48px}}
+
+/* home */
+.hero{position:relative;margin:24px 0 0;border-radius:22px;overflow:hidden;background:radial-gradient(1200px 400px at 80% -10%,var(--glow),transparent 60%),var(--panel);border:1px solid var(--line);box-shadow:var(--shadow)}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%}
+.hero .in{position:relative;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;padding:44px 40px 40px}
+@media (max-width:1000px){.hero .in{grid-template-columns:1fr;padding:28px 20px}}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font:500 11.5px var(--mono);letter-spacing:.04em;color:var(--accent);background:var(--accent-soft);padding:4px 10px;border-radius:99px}
+.hero h1{font-size:clamp(34px,4.4vw,56px);line-height:1.02;letter-spacing:-.045em;font-weight:650;margin:16px 0 14px;text-wrap:balance}
+.hero h1 em{font-style:normal;background:linear-gradient(90deg,var(--accent),#d97706 90%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p.lede{font-size:16px;color:var(--ink2);max-width:52ch;margin:0}
+.stack{display:flex;flex-wrap:wrap;gap:6px;margin-top:22px}
+.chip{font:500 11.5px var(--mono);padding:4px 9px;border-radius:7px;border:1px solid var(--line);background:color-mix(in srgb,var(--panel) 80%,transparent);color:var(--ink2)}
+.drop{background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)}
+.zone{border:1.5px dashed var(--line);border-radius:14px;padding:26px 18px;text-align:center;cursor:pointer;transition:all .15s;background:var(--panel2)}
+.zone:hover,.zone.over{border-color:var(--accent);background:var(--accent-soft)}
+.zone b{display:block;font-size:15px;margin:10px 0 2px}
+.zone small{color:var(--muted)}
+.zone .ic{width:44px;height:44px;border-radius:12px;background:var(--ink);color:var(--bg);display:inline-grid;place-items:center}
+.files{display:flex;flex-direction:column;gap:6px}
+.file{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:13px;background:var(--panel)}
+.file span.n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file span.s{font:11.5px var(--mono);color:var(--muted)}
+.seg{display:inline-flex;padding:3px;border-radius:10px;background:var(--bg2);border:1px solid var(--line)}
+.seg button{border:0;background:transparent;padding:5px 12px;border-radius:7px;font-weight:550;font-size:13px;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.row.between{justify-content:space-between}
+details.settings{border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+details.settings summary{list-style:none;cursor:pointer;padding:10px 12px;font-weight:550;display:flex;justify-content:space-between;align-items:center}
+details.settings summary::-webkit-details-marker{display:none}
+details.settings summary::after{content:"+";font:500 16px var(--mono);color:var(--muted)}
+details.settings[open] summary::after{content:"−"}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px;padding:4px 12px 14px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:500}
+.form label.cb{flex-direction:row;align-items:center;gap:8px;color:var(--ink2);font-size:13px}
+.form input[type=text],.form input[type=number],.form select{height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel2);font-size:13px;width:100%}
+.form input[type=range]{accent-color:var(--accent)}
+.form .full{grid-column:1/-1}
+.examples{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ex{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--panel);display:flex;flex-direction:column;gap:3px;transition:border-color .15s,transform .15s}
+.ex:hover{border-color:var(--accent);transform:translateY(-1px)}
+.ex b{font-weight:600;font-size:13.5px}
+.ex small{color:var(--muted);font-size:12px;line-height:1.35}
+.ex .k{font:500 10.5px var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.08em}
+.feat{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:22px}
+@media (max-width:1000px){.feat{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.feat,.examples,.form{grid-template-columns:1fr}}
+.feat div{padding:16px;border-radius:14px;background:var(--panel);border:1px solid var(--line)}
+.feat h3{margin:8px 0 4px;font-size:14px;font-weight:600}
+.feat p{margin:0;color:var(--muted);font-size:13px}
+.feat svg{width:22px;height:22px;color:var(--accent)}
+.recent{margin-top:26px}
+.recent h2{font-size:14px;font-weight:600;margin:0 0 10px}
+
+/* running */
+.run{max-width:640px;margin:10vh auto 0;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:28px;box-shadow:var(--shadow)}
+.run h2{margin:0;font-size:22px;letter-spacing:-.02em}
+.bar{height:6px;border-radius:99px;background:var(--bg2);overflow:hidden;margin:18px 0 6px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px;transition:width .5s ease;position:relative}
+.bar i::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);animation:sheen 1.4s infinite}
+@keyframes sheen{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.steps{list-style:none;padding:0;margin:18px 0 0;display:flex;flex-direction:column;gap:2px}
+.steps li{display:flex;align-items:center;gap:10px;padding:6px 4px;color:var(--muted);font-size:13.5px}
+.steps li i{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line);flex:none;display:grid;place-items:center}
+.steps li.done{color:var(--ink2)}
+.steps li.done i{background:var(--accent);border-color:var(--accent)}
+.steps li.done i::after{content:"";width:6px;height:3px;border-left:1.5px solid var(--accent-ink);border-bottom:1.5px solid var(--accent-ink);transform:rotate(-45deg) translate(1px,-1px)}
+.steps li.now{color:var(--ink);font-weight:550}
+.steps li.now i{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.bar i::after,.steps li.now i{animation:none}}
+.errbox{margin-top:16px;padding:12px 14px;border-radius:12px;background:var(--warn-soft);color:var(--ink);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent)}
+
+/* results */
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);margin:0 -32px;padding:14px 32px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+@media (max-width:900px){.top{margin:0 -16px;padding:12px 16px}}
+.top h1{margin:0;font-size:18px;letter-spacing:-.02em;font-weight:620;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.badge{font:500 11px var(--mono);padding:3px 8px;border-radius:6px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:22px}
+.tile{padding:14px 16px;border-radius:var(--r);background:var(--panel);border:1px solid var(--line)}
+.tile b{display:block;font-size:24px;font-weight:620;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.15;overflow-wrap:anywhere}
+.tile span{font-size:12px;color:var(--muted)}
+.insights{margin-top:14px;border-radius:18px;padding:6px;background:linear-gradient(135deg,var(--accent-soft),transparent 60%),var(--panel);border:1px solid var(--line)}
+.insights h2{margin:12px 14px 6px;font-size:15px;font-weight:620;display:flex;align-items:center;gap:8px}
+.insight{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;padding:10px 14px;border-top:1px solid var(--line2);font-size:13.5px;color:var(--ink2)}
+.insight:first-of-type{border-top:0}
+.insight b{color:var(--ink);font-weight:600}
+.tag{font:600 10px var(--mono);letter-spacing:.06em;height:20px;padding:0 7px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;width:max-content}
+.tag.ok{background:var(--accent-soft);color:var(--accent)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.info{background:var(--info-soft);color:var(--info)}
+section.sec{padding-top:40px;scroll-margin-top:70px}
+.sech{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.sech .k{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--accent)}
+.sech h2{margin:0;font-size:24px;letter-spacing:-.03em;font-weight:630}
+.sec p.lede{color:var(--muted);max-width:90ch;margin:6px 0 18px}
+.sec p.lede code{font:12px var(--mono);background:var(--bg2);padding:1px 5px;border-radius:5px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:1100px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.card.wide{grid-column:1/-1}
+.card .hd{display:flex;align-items:flex-start;gap:10px;padding:14px 16px 10px}
+.card .hd h3{margin:0;font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+.card .hd .sub{font:11.5px var(--mono);color:var(--muted);margin-top:2px}
+.card .hd .act{margin-left:auto;display:flex;gap:2px}
+.fig{margin:0 12px;border-radius:12px;background:#fff;border:1px solid var(--line2);display:grid;place-items:center;padding:10px;cursor:zoom-in;overflow:hidden}
+.fig img{max-width:100%;height:auto;display:block;max-height:560px}
+.card .ft{padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.card .ft .how{color:var(--muted)}
+.card .ft .yours{color:var(--ink2);padding:9px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--line2)}
+.card .ft .yours b{color:var(--accent);font-weight:600}
+.card .ft .yours::before{content:"In your data";display:block;font:500 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.tbl{padding:0 16px 8px}
+.tbl .tools{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.tbl input{height:32px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel2);font-size:13px;width:220px;max-width:100%}
+.tscroll{overflow:auto;max-height:440px;border:1px solid var(--line2);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}
+th{position:sticky;top:0;background:var(--panel2);text-align:left;font:500 11px var(--mono);letter-spacing:.04em;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+td{padding:6px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
+tr:hover td{background:var(--panel2)}
+td.gene{font-family:var(--mono);font-weight:500}
+.note{color:var(--muted);font-size:12.5px;padding:8px 16px 16px}
+.methods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:800px){.methods{grid-template-columns:1fr}}
+.methods div{padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.methods h4{margin:0 0 4px;font-size:13.5px}
+.methods p{margin:0;color:var(--muted);font-size:13px}
+.versions{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+
+/* explorer */
+.explorer{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:0;border-top:1px solid var(--line2)}
+@media (max-width:800px){.explorer{grid-template-columns:1fr}}
+.explorer .plot{position:relative;min-height:460px;background:var(--panel2)}
+.explorer canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.explorer .panel{border-left:1px solid var(--line2);padding:14px;display:flex;flex-direction:column;gap:12px;max-height:520px;overflow:auto}
+@media (max-width:800px){.explorer .panel{border-left:0;border-top:1px solid var(--line2)}}
+.explorer .panel label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.explorer select,.explorer input{height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel);font-size:13px}
+.leg{display:flex;flex-direction:column;gap:1px}
+.leg button{all:unset;display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;font-size:12.5px;cursor:pointer}
+.leg button:hover{background:var(--bg2)}
+.leg button.off{opacity:.35}
+.leg i{width:10px;height:10px;border-radius:3px;flex:none}
+.grad{height:10px;border-radius:99px;background:linear-gradient(90deg,#440154,#3b528b,#21918c,#5ec962,#fde725)}
+.hint{font-size:12px;color:var(--muted)}
+.tip{position:fixed;z-index:50;pointer-events:none;background:var(--ink);color:var(--bg);font:12px var(--mono);padding:5px 8px;border-radius:7px;white-space:nowrap}
+.plot .zoomctl{position:absolute;right:10px;top:10px;display:flex;gap:4px}
+
+/* chat panel */
+.chatwrap{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:var(--panel);border-left:1px solid var(--line);z-index:40;display:flex;flex-direction:column;box-shadow:-20px 0 40px -24px rgba(0,0,0,.35);transform:translateX(100%);transition:transform .2s ease}
+.chatwrap.open{transform:none}
+@media (prefers-reduced-motion:reduce){.chatwrap{transition:none}}
+body.chat-open main{padding-right:calc(32px + min(440px,100vw))}
+@media (max-width:1200px){body.chat-open main{padding-right:32px}}
+.chat-h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.chat-h h3{margin:0;font-size:14px;font-weight:620;flex:1;display:flex;align-items:center;gap:8px}
+.chat-h .ctx{font:11px var(--mono);color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-b{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:100%;font-size:13.5px;line-height:1.55}
+.msg.user{align-self:flex-end;background:var(--accent-soft);color:var(--ink);padding:9px 12px;border-radius:14px 14px 4px 14px;max-width:85%}
+.msg.ai{color:var(--ink)}
+.msg.ai p{margin:0 0 8px}.msg.ai p:last-child{margin:0}
+.msg.ai code{font:12px var(--mono);background:var(--bg2);padding:1px 5px;border-radius:4px}
+.msg.ai pre{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;font:12px/1.5 var(--mono)}
+.msg.ai ul,.msg.ai ol{margin:4px 0 8px;padding-left:20px}
+.msg.ai img{max-width:100%;border-radius:8px;border:1px solid var(--line);background:#fff;margin:4px 0}
+.msg.ai h1,.msg.ai h2,.msg.ai h3{font-size:14px;margin:8px 0 4px}
+.toolcard{border:1px solid var(--line);border-radius:10px;background:var(--panel2);font-size:12px;overflow:hidden}
+.toolcard summary{list-style:none;cursor:pointer;padding:7px 10px;display:flex;gap:8px;align-items:center;color:var(--ink2)}
+.toolcard summary::-webkit-details-marker{display:none}
+.toolcard summary i{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+.toolcard summary i.run{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.toolcard summary b{font:600 12px var(--mono)}
+.toolcard pre{margin:0;padding:8px 10px;border-top:1px solid var(--line2);font:11px/1.45 var(--mono);white-space:pre-wrap;max-height:220px;overflow:auto;color:var(--muted)}
+.chat-f{border-top:1px solid var(--line);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.chat-f textarea{width:100%;min-height:64px;max-height:180px;resize:vertical;border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:var(--panel2);font:13.5px var(--sans);color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{all:unset;cursor:pointer;font-size:12px;padding:4px 9px;border-radius:99px;border:1px solid var(--line);color:var(--ink2);background:var(--panel)}
+.chips button:hover{border-color:var(--accent);color:var(--accent)}
+.fab{position:fixed;right:20px;bottom:20px;z-index:39;height:44px;padding:0 16px;border-radius:99px;background:var(--ink);color:var(--bg);border:0;font:600 13.5px var(--sans);display:flex;align-items:center;gap:8px;cursor:pointer;box-shadow:0 10px 30px -10px rgba(0,0,0,.45)}
+.fab:hover{background:var(--accent);color:var(--accent-ink)}
+.fab svg{width:16px;height:16px}
+body.chat-open .fab{display:none}
+
+/* code viewer */
+.codewrap{position:fixed;inset:0;z-index:62;display:grid;grid-template-columns:220px minmax(0,1fr);background:var(--panel)}
+@media (max-width:800px){.codewrap{grid-template-columns:1fr}.codewrap .files{display:none}}
+.codewrap .files{border-right:1px solid var(--line);padding:12px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.codewrap .files a{display:block;padding:6px 8px;border-radius:7px;font:12.5px var(--mono);color:var(--ink2);text-decoration:none;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.codewrap .files a.on{background:var(--accent-soft);color:var(--accent)}
+.codewrap .files .navlabel{margin:10px 0 4px}
+.codewrap .body{display:flex;flex-direction:column;min-width:0}
+.codewrap .bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.codewrap .bar h3{margin:0;font:600 13px var(--mono);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.codewrap pre{margin:0;flex:1;overflow:auto;padding:16px 18px;font:12.5px/1.55 var(--mono);color:var(--ink);background:var(--panel2);tab-size:4}
+.codewrap .desc{padding:10px 14px;font-size:13px;color:var(--muted);border-bottom:1px solid var(--line2)}
+.geo{display:flex;flex-direction:column;gap:8px}
+.geo .list{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.geo .list label{display:flex;gap:8px;align-items:center;padding:6px 10px;font:12px var(--mono);border-bottom:1px solid var(--line2);cursor:pointer}
+.geo .list label span.sz{margin-left:auto;color:var(--muted)}
+.modal{position:fixed;inset:0;z-index:70;display:grid;place-items:center;background:rgba(5,12,16,.5);padding:16px}
+.modal .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;width:min(460px,100%);display:flex;flex-direction:column;gap:12px}
+.modal h3{margin:0;font-size:16px}
+.modal label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.modal input,.modal select{height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel2);font-size:13px}
+
+/* drawer + lightbox */
+.scrim{position:fixed;inset:0;background:rgba(5,12,16,.45);z-index:60;backdrop-filter:blur(2px)}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--panel);z-index:61;border-left:1px solid var(--line);display:flex;flex-direction:column;box-shadow:-20px 0 40px -20px rgba(0,0,0,.3)}
+.drawer .dh{display:flex;align-items:center;padding:16px;border-bottom:1px solid var(--line)}
+.drawer .dh h3{margin:0;font-size:16px;flex:1}
+.drawer .db{overflow:auto;padding:8px 4px}
+.drawer .df{padding:14px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.lightbox{position:fixed;inset:0;z-index:70;display:grid;place-items:center;background:rgba(5,12,16,.8);padding:24px;cursor:zoom-out}
+.lightbox img{max-width:100%;max-height:100%;background:#fff;border-radius:12px;padding:12px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:80;font-size:13px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <a class="logo" href="#" id="homeLink">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--ink)"/><circle cx="11" cy="12.5" r="3.2" fill="#5eead4"/><circle cx="20.5" cy="17.5" r="4.2" fill="#fbbf24"/><circle cx="13" cy="21.5" r="2.2" fill="#fb7185"/><circle cx="21" cy="9.5" r="1.4" fill="#93c5fd"/></svg>
+      <span><b>RNAseq Bench</b><small>scanpy · pydeseq2 · <span id="appVersion"></span></small></span>
+    </a>
+    <button class="btn primary" id="newBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New analysis</button>
+    <div class="navwrap" id="navWrap" hidden><div class="navlabel">Report</div><nav class="nav" id="nav"></nav></div>
+    <div class="dlwrap" id="dlWrap" hidden><div class="navlabel">Downloads</div><div class="dl" id="dl"></div></div>
+    <div class="navwrap" id="toolsWrap"><div class="navlabel">Tools</div><nav class="nav">
+      <a href="#" id="codeBtn"><i>&lt;/&gt;</i>View code</a>
+      <a href="#" id="settingsBtn"><i>⚙</i>Settings &amp; API key</a>
+      <a href="#" id="quitBtn" title="Stop the local server (finished analyses stay on disk)"><i>⏻</i>Quit RNAseq Bench</a>
+    </nav></div>
+    <div class="foot">
+      <button class="btn ghost sm" id="themeBtn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+      <span>Runs locally · data stays on your Mac</span>
+    </div>
+  </aside>
+
+  <main>
+    <!-- HOME -->
+    <div id="home">
+      <div class="hero">
+        <canvas id="heroCanvas" aria-hidden="true"></canvas>
+        <div class="in">
+          <div>
+            <span class="eyebrow">● Scanpy 1.11 · PyDESeq2 · Harmony · Scrublet</span>
+            <h1>From count matrix to <em>figures you can publish</em></h1>
+            <p class="lede">Upload bulk or single-cell RNA-seq. RNAseq Bench runs the standard Scanpy and DESeq2 workflows, draws the plots scientists expect, and explains what each one says about your data.</p>
+            <div class="stack">
+              <span class="chip">.h5ad</span><span class="chip">10x .h5</span><span class="chip">matrix.mtx + features + barcodes</span><span class="chip">.loom</span><span class="chip">counts .csv / .tsv</span><span class="chip">+ metadata .csv</span><span class="chip">.zip / .tar.gz</span><span class="chip">GEO series matrix</span><span class="chip">Ensembl IDs</span>
+            </div>
+          </div>
+          <div class="drop">
+            <div class="row between">
+              <div class="seg" role="tablist" aria-label="Data type">
+                <button class="on" data-kind="auto">Auto-detect</button><button data-kind="sc">Single-cell</button><button data-kind="bulk">Bulk</button>
+              </div>
+            </div>
+            <label class="zone" id="zone" for="fileInput">
+              <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg></span>
+              <b>Drop files or click to browse</b>
+              <small>Select a count file plus an optional sample/cell metadata file</small>
+              <input type="file" id="fileInput" multiple hidden>
+            </label>
+            <div class="files" id="fileList"></div>
+            <details class="settings" id="settings">
+              <summary>Analysis settings</summary>
+              <div id="scForm" class="form">
+                <label>Min genes / cell<input type="number" id="s_min_genes" placeholder="auto (MAD)"></label>
+                <label>Max genes / cell<input type="number" id="s_max_genes" placeholder="auto (MAD)"></label>
+                <label>Max mitochondrial %<input type="number" step="0.5" id="s_max_mt" placeholder="auto (MAD)"></label>
+                <label>Highly variable genes<input type="number" id="s_n_hvg" value="2000"></label>
+                <label class="full">Leiden resolution <span class="mono" id="resVal">0.5</span><input type="range" id="s_resolution" min="0.1" max="2" step="0.05" value="0.5"></label>
+                <label>Batch / sample column<input type="text" id="s_batch_key" placeholder="auto (sample, batch…)"></label>
+                <label>PCs for graph<input type="number" id="s_n_pcs" placeholder="auto (elbow)"></label>
+                <label>Sample column (pseudobulk)<input type="text" id="s_sample_key" placeholder="auto (sample, plate…)"></label>
+                <label>Condition column<input type="text" id="s_condition_key" placeholder="auto (genotype, condition…)"></label>
+                <label class="cb"><input type="checkbox" id="s_doublets" checked> Remove doublets (auto-off for plate-based)</label>
+                <label class="cb"><input type="checkbox" id="s_integrate" checked> Harmony batch integration</label>
+                <label class="cb full"><input type="checkbox" id="s_pseudobulk" checked> Composition test + pseudobulk DESeq2 when a condition exists</label>
+              </div>
+              <div id="bulkForm" class="form" hidden>
+                <label>Design factor<input type="text" id="b_factor" placeholder="auto (condition…)"></label>
+                <label>Covariates<input type="text" id="b_covariates" placeholder="e.g. sex, batch"></label>
+                <label>Reference level<input type="text" id="b_reference" placeholder="auto (control…)"></label>
+                <label>Compare level<input type="text" id="b_alternative" placeholder="auto"></label>
+                <label>FDR (padj)<input type="number" step="0.01" id="b_alpha" value="0.05"></label>
+                <label>|log2 fold change| ≥<input type="number" step="0.25" id="b_lfc" value="1"></label>
+                <label class="full">Groups, if no metadata file (column order)<input type="text" id="b_groups" placeholder="ctrl, ctrl, ctrl, treated, treated, treated"></label>
+                <label>Technical replicates<select id="b_collapse"><option value="auto">Auto-detect &amp; sum</option><option value="true">Always sum</option><option value="false">Keep separate</option></select></label>
+                <label class="cb"><input type="checkbox" id="b_infer_sex" checked> Infer sex from XIST / chrY</label>
+                <label class="cb full"><input type="checkbox" id="b_enrichment" checked> Pathway enrichment (Enrichr, needs internet)</label>
+              </div>
+            </details>
+            <button class="btn accent" id="runBtn" disabled style="height:42px">Run analysis</button>
+            <details class="settings" id="geoBox">
+              <summary>Import from GEO by accession</summary>
+              <div class="geo" style="padding:4px 12px 14px">
+                <div class="row"><input type="text" id="geoAcc" placeholder="GSE306264" style="flex:1;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel2)"><button class="btn sm" id="geoList">List files</button></div>
+                <div class="list" id="geoFiles" hidden></div>
+                <div class="row between" id="geoRun" hidden><span class="hint">Tick the counts file (and series matrix for sample annotations)</span><button class="btn accent sm" id="geoGo">Download &amp; analyze</button></div>
+              </div>
+            </details>
+            <div class="examples">
+              <button class="ex" id="demoSc"><span class="k">Single-cell example</span><b>PBMC 3k</b><small>2,700 blood cells · 10x Genomics · the Seurat/Scanpy tutorial set</small></button>
+              <button class="ex" id="demoBulk"><span class="k">Bulk example</span><b>GSE96870</b><small>22 mouse cerebellum samples · influenza vs uninfected</small></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="feat">
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l3-3 3 2 5-6"/></svg><h3>Real pipelines</h3><p>Scanpy QC, Scrublet, seurat_v3 HVGs, Harmony, Leiden, Wilcoxon markers. DESeq2 with LFC shrinkage for bulk.</p></div>
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="15" r="4"/><circle cx="17" cy="6" r="1.5"/></svg><h3>Scientist-grade plots</h3><p>Violin QC, elbow, UMAP, dot plots, stacked violins, dispersion, volcano, MA, clustered heatmaps.</p></div>
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h10M4 19h7"/></svg><h3>Plain-language readouts</h3><p>Every figure says how to read it and what it shows in your data, plus flags for outliers, batch effects and doublets.</p></div>
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 5l-2 14"/></svg><h3>Assistant &amp; code</h3><p>Ask Claude to explain, re-run or fix an analysis. Every result comes with a reproducible Python script and the pipeline source.</p></div>
+      </div>
+      <div class="recent" id="recentWrap" hidden><h2>Recent analyses</h2><div class="row" id="recent"></div></div>
+    </div>
+
+    <!-- RUNNING -->
+    <div id="running" hidden>
+      <div class="run">
+        <div class="row between"><span class="badge" id="runKind">single-cell</span><span class="mono" style="color:var(--muted);font-size:12px" id="runPct">0%</span></div>
+        <h2 style="margin-top:12px" id="runTitle">Analyzing…</h2>
+        <div style="color:var(--muted);margin-top:4px" id="runMsg">Starting</div>
+        <div class="bar"><i id="runBar" style="width:2%"></i></div>
+        <ul class="steps" id="runSteps"></ul>
+        <div id="runErr"></div>
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="results" hidden></div>
+  </main>
+</div>
+<div class="tip" id="tip" hidden></div>
+<button class="fab" id="fab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"/></svg>Ask Claude</button>
+<aside class="chatwrap" id="chat" aria-label="Assistant">
+  <div class="chat-h"><h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12z"/></svg>Assistant <span class="ctx" id="chatCtx"></span></h3>
+    <button class="btn ghost sm" id="chatReset" title="New conversation">↺</button><button class="btn ghost sm" id="chatClose" aria-label="Close">✕</button></div>
+  <div class="chat-b" id="chatBody"><div class="msg ai"><p>I can explain what a result means, re-run an analysis with different settings, fix a metadata problem, or write custom plots and tests against the data. I only see what's in this app.</p></div></div>
+  <div class="chat-f">
+    <div class="chips" id="chips"></div>
+    <textarea id="chatIn" placeholder="Ask about this analysis, or tell me what to change…"></textarea>
+    <div class="row between"><span class="hint" id="chatHint"></span><button class="btn accent sm" id="chatSend">Send</button></div>
+  </div>
+</aside>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const safe=s=>String(s??"").replace(/<(?!\/?(b|i|code)>)/g,"&lt;");
+const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e};
+const S={kind:"auto",files:[],job:null,result:null,poll:null,chatBusy:false};
+const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+function toast(m){const t=el("div","toast",esc(m));document.body.appendChild(t);setTimeout(()=>t.remove(),3200)}
+
+/* theme */
+(()=>{const t=store.get("theme",null);if(t)document.documentElement.dataset.theme=t})();
+$("#themeBtn").onclick=()=>{const cur=document.documentElement.dataset.theme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");const n=cur==="dark"?"light":"dark";document.documentElement.dataset.theme=n;store.set("theme",n);window.dispatchEvent(new Event("themechange"))};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* hero canvas: points condensing into clusters */
+(function hero(){const cv=$("#heroCanvas"),ctx=cv.getContext("2d");const cols=["#14b8a6","#f59e0b","#fb7185","#60a5fa","#a78bfa","#34d399","#f472b6"];let W,H,pts=[],t0=performance.now();
+ const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+ function init(){const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  const centers=cols.map((c,i)=>({x:W*(0.3+0.68*Math.random()),y:H*(0.08+0.84*Math.random()),s:10+Math.random()*26}));pts=[];
+  for(let i=0;i<700;i++){const k=Math.floor(Math.pow(Math.random(),1.4)*cols.length),c=centers[k],a=Math.random()*6.283,r=Math.sqrt(-2*Math.log(Math.random()+1e-9))*c.s;pts.push({x0:Math.random()*W,y0:Math.random()*H,x1:c.x+Math.cos(a)*r,y1:c.y+Math.sin(a)*r*.8,k,ph:Math.random()*6.28})}}
+ function frame(now){const p=reduce?1:Math.min(1,(now-t0)/2600),e=1-Math.pow(1-p,3);ctx.clearRect(0,0,W,H);
+  for(const q of pts){const wob=reduce?0:Math.sin(now/1400+q.ph)*1.2;const x=q.x0+(q.x1-q.x0)*e+wob,y=q.y0+(q.y1-q.y0)*e+wob;ctx.globalAlpha=.16+.4*e;ctx.fillStyle=cols[q.k];ctx.beginPath();ctx.arc(x,y,1.8,0,6.283);ctx.fill()}
+  ctx.globalAlpha=1;if(!reduce&&!$("#home").hidden)requestAnimationFrame(frame)}
+ init();requestAnimationFrame(frame);new ResizeObserver(()=>{init();t0=performance.now()-2600;requestAnimationFrame(frame)}).observe(cv);
+ window.__heroRestart=()=>{requestAnimationFrame(frame)}})();
+
+/* home interactions */
+$$(".seg button").forEach(b=>b.onclick=()=>{$$(".seg button").forEach(x=>x.classList.toggle("on",x===b));S.kind=b.dataset.kind;syncForms()});
+function syncForms(){const k=S.kind==="auto"?guessKind():S.kind;$("#scForm").hidden=k==="bulk";$("#bulkForm").hidden=k!=="bulk"}
+function guessKind(){const n=S.files.map(f=>f.name.toLowerCase());if(n.some(x=>/\.(h5ad|h5|loom|mtx(\.gz)?)$/.test(x)))return"sc";if(n.length&&n.every(x=>/\.(csv|tsv|txt)(\.gz)?$/.test(x))){const big=Math.max(...S.files.map(f=>f.size));return big>30e6?"sc":"bulk"}return"sc"}
+$("#s_resolution").oninput=e=>$("#resVal").textContent=e.target.value;
+const zone=$("#zone");
+["dragenter","dragover"].forEach(t=>zone.addEventListener(t,e=>{e.preventDefault();zone.classList.add("over")}));
+["dragleave","drop"].forEach(t=>zone.addEventListener(t,e=>{e.preventDefault();zone.classList.remove("over")}));
+zone.addEventListener("drop",e=>addFiles(e.dataTransfer.files));
+$("#fileInput").onchange=e=>{addFiles(e.target.files);e.target.value=""};
+const size=b=>b>1e9?(b/1e9).toFixed(1)+" GB":b>1e6?(b/1e6).toFixed(1)+" MB":Math.max(1,Math.round(b/1e3))+" KB";
+function addFiles(fl){for(const f of fl)if(!S.files.some(x=>x.name===f.name))S.files.push(f);renderFiles()}
+function renderFiles(){const L=$("#fileList");L.innerHTML="";S.files.forEach((f,i)=>{const r=el("div","file",`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg><span class="n">${esc(f.name)}</span><span class="s">${size(f.size)}</span>`);const x=el("button","btn ghost sm","✕");x.setAttribute("aria-label","Remove "+f.name);x.onclick=()=>{S.files.splice(i,1);renderFiles()};r.appendChild(x);L.appendChild(r)});$("#runBtn").disabled=!S.files.length;syncForms()}
+function collectParams(kind){const p={};if(kind==="bulk"){for(const k of["factor","reference","alternative","groups"]){const v=$("#b_"+k).value.trim();if(v)p[k]=v}const cv=$("#b_covariates").value.trim();if(cv)p.covariates=cv.split(",").map(s=>s.trim()).filter(Boolean);p.alpha=+$("#b_alpha").value||.05;p.lfc=+$("#b_lfc").value||1;p.enrichment=$("#b_enrichment").checked;p.collapse_replicates=$("#b_collapse").value;p.infer_sex=$("#b_infer_sex").checked}
+ else{for(const k of["min_genes","max_genes","max_mt","n_hvg","n_pcs"]){const v=$("#s_"+k).value;if(v!=="")p[k]=+v}p.resolution=+$("#s_resolution").value;const b=$("#s_batch_key").value.trim();if(b)p.batch_key=b;p.doublets=$("#s_doublets").checked?"auto":false;p.integrate=$("#s_integrate").checked;p.pseudobulk=$("#s_pseudobulk").checked;const sk=$("#s_sample_key").value.trim(),ck=$("#s_condition_key").value.trim();if(sk)p.sample_key=sk;if(ck)p.condition_key=ck}return p}
+$("#runBtn").onclick=async()=>{const kind=S.kind==="auto"?guessKind():S.kind;const fd=new FormData();S.files.forEach(f=>fd.append("files",f));fd.append("kind",S.kind);fd.append("params",JSON.stringify(collectParams(kind)));
+ showRunning(kind,"Uploading "+S.files.length+" file"+(S.files.length>1?"s":"")+"…");
+ try{const r=await fetch("/api/analyze",{method:"POST",body:fd});if(!r.ok)throw new Error(await r.text());const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError("Upload failed: "+e.message)}};
+$("#demoSc").onclick=()=>demo("sc");$("#demoBulk").onclick=()=>demo("bulk");
+async function demo(w){showRunning(w,w==="sc"?"Fetching PBMC 3k…":"Loading GSE96870…");try{const r=await fetch("/api/demo/"+w,{method:"POST"});const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError(e.message)}}
+$("#newBtn").onclick=$("#homeLink").onclick=e=>{e.preventDefault();go("home")};
+
+function go(view){for(const v of["home","running","results"])$("#"+v).hidden=v!==view;$("#navWrap").hidden=$("#dlWrap").hidden=view!=="results";if(view==="home"){history.replaceState(null,"","#");renderRecent();window.__heroRestart()}window.scrollTo(0,0)}
+function renderRecent(){const r=store.get("recent",[]);$("#recentWrap").hidden=!r.length;$("#recent").innerHTML="";r.slice(0,6).forEach(x=>{const b=el("button","ex",`<span class="k">${x.kind==="sc"?"single-cell":"bulk"}</span><b>${esc(x.name)}</b><small>${new Date(x.t).toLocaleString()}</small>`);b.style.maxWidth="280px";b.onclick=()=>loadResult(x.job);$("#recent").appendChild(b)})}
+
+/* running */
+const STEPS={sc:[[3,"Read data"],[8,"QC metrics & MAD thresholds"],[18,"Doublet detection (Scrublet)"],[30,"Normalize & highly variable genes"],[40,"Scale & PCA"],[50,"Batch integration"],[55,"Neighbour graph & UMAP"],[68,"Leiden clustering"],[75,"Wilcoxon marker genes"],[82,"Figures"],[94,"Save AnnData"],[98,"PDF report"]],
+ bulk:[[3,"Read counts & metadata"],[12,"DESeq2: size factors, dispersions, GLM"],[45,"Variance-stabilizing transform"],[55,"Wald tests & LFC shrinkage"],[70,"Figures"],[88,"Pathway enrichment"],[98,"PDF report"]]};
+function showRunning(kind,msg){go("running");S.runKind=kind;$("#runKind").textContent=kind==="bulk"?"bulk RNA-seq · PyDESeq2":"single-cell · Scanpy";$("#runTitle").textContent="Analyzing your data";$("#runErr").innerHTML="";updRun({pct:1,message:msg})}
+function updRun(s){const kind=S.runKind==="bulk"?"bulk":"sc";$("#runBar").style.width=Math.max(2,s.pct)+"%";$("#runPct").textContent=Math.round(s.pct)+"%";$("#runMsg").textContent=s.message;
+ const st=STEPS[kind];$("#runSteps").innerHTML=st.map(([p,l],i)=>{const next=st[i+1]?st[i+1][0]:101;const cls=s.pct>=next||s.state==="done"?"done":s.pct>=p?"now":"";return`<li class="${cls}"><i></i>${l}</li>`}).join("")}
+function runError(m,trace){$("#runTitle").textContent="Analysis stopped";$("#runErr").innerHTML=`<div class="errbox">${esc(m)}</div>${trace?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted)">Technical details (copy this when reporting a problem)</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:320px;overflow:auto;background:var(--panel2);padding:10px;border-radius:8px">${esc(trace)}</pre><button class="btn" onclick="navigator.clipboard.writeText(${JSON.stringify(m+"\n"+trace)});toast('Copied')">Copy details</button></details>`:""}<div class="row" style="margin-top:12px"><button class="btn" onclick="go('home')">Back to upload</button></div>`}
+function startPoll(job,kind){S.runKind=kind;clearInterval(S.poll);history.replaceState(null,"","#job="+job);
+ S.poll=setInterval(async()=>{try{const r=await fetch(`/api/jobs/${job}/status`);if(!r.ok)return;const s=await r.json();updRun(s);if(s.state==="done"){clearInterval(S.poll);loadResult(job)}else if(s.state==="error"){clearInterval(S.poll);runError(s.error||"Unknown error",s.trace)}}catch{}},900)}
+
+/* results */
+async function loadResult(job){const r=await fetch(`/api/jobs/${job}/result`);if(!r.ok){const s=await fetch(`/api/jobs/${job}/status`);if(s.ok){const st=await s.json();if(st.state==="running"){showRunning(S.runKind||"sc",st.message);startPoll(job,S.runKind||"sc");return}}toast("That analysis is no longer available.");go("home");return}
+ const res=await r.json();S.job=job;S.result=res;history.replaceState(null,"","#job="+job);
+ const rec=store.get("recent",[]).filter(x=>x.job!==job);rec.unshift({job,name:res.name,kind:res.kind,t:Date.now()});store.set("recent",rec.slice(0,12));
+ renderResults(res);go("results")}
+const F=(job,p)=>`/api/jobs/${job}/files/${p}`;
+function renderResults(R){const job=S.job,root=$("#results");root.innerHTML="";
+ const top=el("div","top");top.innerHTML=`<span class="badge">${R.kind==="sc"?"single-cell":"bulk RNA-seq"}</span><h1 title="${esc(R.name)}">${esc(R.name)}</h1>
+  <button class="btn sm" id="codeBtn2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 5l-2 14"/></svg>View code</button>
+  <button class="btn sm" id="tuneBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Adjust & re-run</button>
+  <a class="btn sm accent" href="${F(job,"report.pdf")}" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>PDF report</a>`;
+ root.appendChild(top);top.querySelector("#tuneBtn").onclick=()=>openTune(R);top.querySelector("#codeBtn2").onclick=()=>openCode(S.job);
+ $("#chatCtx").textContent=R.name;setChips(R);
+ const tiles=el("div","tiles");tiles.innerHTML=R.tiles.map(t=>`<div class="tile"><b style="${String(t.value).length>10?"font-size:17px":""}">${esc(t.value)}</b><span>${esc(t.label)}</span></div>`).join("");root.appendChild(tiles);
+ const ins=el("div","insights");ins.id="summary";ins.innerHTML=`<h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>What your data says</h2>`+R.flags.map(f=>`<div class="insight"><span class="tag ${f.level}">${{ok:"OK",warn:"CHECK",info:"NOTE"}[f.level]}</span><div>${safe(f.text)}</div></div>`).join("");root.appendChild(ins);
+ const navItems=[["summary","Summary"]];
+ R.sections.forEach((s,i)=>{navItems.push([s.id,s.title.replace(/^Differential expression: /,"DE: ")]);const sec=el("section","sec");sec.id=s.id;
+  sec.innerHTML=`<div class="sech"><span class="k">${esc(s.kicker)}</span><h2>${esc(s.title)}</h2></div><p class="lede">${safe(s.lede)}</p>`;const g=el("div","grid");sec.appendChild(g);
+  s.items.forEach(it=>{if(it.type==="figure")g.appendChild(figCard(it,job));else if(it.type==="table")g.appendChild(tableCard(it,job));else if(it.type==="explorer")g.appendChild(explorerCard(it,job))});root.appendChild(sec)});
+ const m=el("section","sec");m.id="methods";navItems.push(["methods","Methods"]);m.innerHTML=`<div class="sech"><span class="k">Reproducibility</span><h2>Methods</h2></div><p class="lede">Parameters and software used, ready to adapt for a methods section.</p><div class="methods">${R.methods.map(([h,p])=>`<div><h4>${esc(h)}</h4><p>${safe(p)}</p></div>`).join("")}</div><div class="versions">${Object.entries(R.versions||{}).map(([k,v])=>`<span class="chip">${esc(k)} ${esc(v)}</span>`).join("")}</div>`;root.appendChild(m);
+ $("#nav").innerHTML=navItems.map(([id,l],i)=>`<a href="#${id}" data-id="${id}"><i>${i===0?"◎":i===navItems.length-1?"≡":i}</i>${esc(l)}</a>`).join("");
+ $$("#nav a").forEach(a=>a.onclick=e=>{e.preventDefault();document.getElementById(a.dataset.id).scrollIntoView({behavior:"smooth"})});
+ const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)$$("#nav a").forEach(a=>a.classList.toggle("on",a.dataset.id===e.target.id))})},{rootMargin:"-30% 0px -60% 0px"});navItems.forEach(([id])=>{const n=document.getElementById(id);if(n)obs.observe(n)});
+ $("#dl").innerHTML=[{label:"PDF report",href:"report.pdf"},...R.downloads].map(d=>`<a href="${F(job,d.href)}" download><span>${esc(d.label.replace(/ \(\.\w+\)$/,""))}</span><span>${esc((d.href.split(".").pop()))}</span></a>`).join("");
+}
+function figCard(it,job){const c=el("article","card"+(it.wide?" wide":""));const src=F(job,it.src);
+ c.innerHTML=`<div class="hd"><div><h3>${esc(it.title)}</h3>${it.sub?`<div class="sub">${esc(it.sub)}</div>`:""}</div><div class="act"><a class="btn ghost sm" href="${src}" download="${esc(it.id)}.png" title="Download PNG (200 dpi)" aria-label="Download PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg></a></div></div>
+ <div class="fig"><img loading="lazy" src="${src}" alt="${esc(it.title)}"></div><div class="ft">${it.how?`<div class="how">${safe(it.how)}</div>`:""}${it.yours?`<div class="yours">${safe(it.yours)}</div>`:""}</div>`;
+ c.querySelector(".fig").onclick=()=>{const lb=el("div","lightbox",`<img src="${src}" alt="">`);lb.onclick=()=>lb.remove();document.body.appendChild(lb)};return c}
+function tableCard(it,job){const c=el("article","card wide");let sortCol=-1,dir=1,q="";
+ c.innerHTML=`<div class="hd"><div><h3>${esc(it.title)}</h3><div class="sub">${it.rows.length} rows</div></div><div class="act">${it.csv?`<a class="btn sm" href="${F(job,it.csv)}" download>Full CSV</a>`:""}</div></div><div class="tbl"><div class="tools"><input type="search" placeholder="Filter rows…" aria-label="Filter ${esc(it.title)}"></div><div class="tscroll"><table><thead><tr>${it.columns.map((h,i)=>`<th data-i="${i}">${esc(h)}</th>`).join("")}</tr></thead><tbody></tbody></table></div></div>${it.note?`<div class="note">${safe(it.note)}</div>`:""}`;
+ const tb=c.querySelector("tbody");const geneCol=it.columns.findIndex(h=>/gene/i.test(h)&&!/genes/i.test(h));
+ const num=v=>{const x=parseFloat(String(v).replace(/[,%]/g,""));return isNaN(x)?null:x};
+ function draw(){let rows=it.rows.filter(r=>!q||r.join(" ").toLowerCase().includes(q));if(sortCol>=0)rows=rows.slice().sort((a,b)=>{const x=num(a[sortCol]),y=num(b[sortCol]);return(x!=null&&y!=null?x-y:String(a[sortCol]).localeCompare(String(b[sortCol])))*dir});
+  tb.innerHTML=rows.map(r=>`<tr>${r.map((v,i)=>`<td class="${i===geneCol||(i===1&&/marker/i.test(it.id))?"gene":""}">${esc(v)}</td>`).join("")}</tr>`).join("")}
+ c.querySelector("input").oninput=e=>{q=e.target.value.toLowerCase();draw()};
+ c.querySelectorAll("th").forEach(th=>th.onclick=()=>{const i=+th.dataset.i;dir=sortCol===i?-dir:1;sortCol=i;draw()});draw();return c}
+
+/* interactive explorer */
+const VIR=["#440154","#482878","#3e4a89","#31688e","#26828e","#1f9e89","#35b779","#6ece58","#b5de2b","#fde725"];
+const vir=t=>VIR[Math.max(0,Math.min(9,Math.floor(t*9.999)))];
+function explorerCard(it,job){const c=el("article","card wide");
+ c.innerHTML=`<div class="hd"><div><h3>${esc(it.title)}</h3><div class="sub">hover a cell · click legend entries to hide clusters · scroll to zoom, drag to pan</div></div></div>
+ <div class="explorer"><div class="plot"><canvas></canvas><div class="zoomctl"><button class="btn sm" data-z="reset">Reset view</button></div></div><div class="panel">
+  <label>Colour by<select class="colorBy"></select></label>
+  <label class="geneWrap">Gene<input class="geneQ" list="geneList_${job}" placeholder="e.g. CD3E, MS4A1"><datalist id="geneList_${job}"></datalist></label>
+  <div class="hint status">Loading embedding…</div><div class="legend"></div></div></div>`;
+ const cv=c.querySelector("canvas"),ctx=cv.getContext("2d"),sel=c.querySelector(".colorBy"),gq=c.querySelector(".geneQ"),leg=c.querySelector(".legend"),status=c.querySelector(".status");
+ let E=null,mode="cluster",vals=null,cats=null,hidden=new Set(),view={s:1,x:0,y:0},W=0,H=0,bounds=null,pts=null;
+ fetch(F(job,it.data)).then(r=>r.json()).then(d=>{E=d;
+  sel.innerHTML=`<option value="cluster">Cluster / cell type</option>`+Object.keys(d.categorical).map(k=>`<option value="c:${esc(k)}">${esc(k)}</option>`).join("")+Object.keys(d.numeric).map(k=>`<option value="n:${esc(k)}">${esc(k)}</option>`).join("")+`<option value="gene">Gene expression</option>`;
+  c.querySelector("datalist").innerHTML=d.genes.map(g=>`<option value="${esc(g)}">`).join("");
+  const xs=d.x,ys=d.y;let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;for(let i=0;i<xs.length;i++){x0=Math.min(x0,xs[i]);x1=Math.max(x1,xs[i]);y0=Math.min(y0,ys[i]);y1=Math.max(y1,ys[i])}bounds={x0,x1,y0,y1};
+  status.textContent=`${d.x.length.toLocaleString()} cells shown`;setMode("cluster")});
+ sel.onchange=()=>{if(sel.value==="gene"){gq.focus();if(!gq.value){const firstC=Object.values(E.top_markers)[0];gq.value=(firstC&&firstC[0])||E.genes[0]}loadGene(gq.value)}else setMode(sel.value)};
+ gq.onchange=()=>{sel.value="gene";loadGene(gq.value)};
+ async function loadGene(g){g=g.trim();if(!g)return;status.textContent="Loading "+g+"…";const r=await fetch(`/api/jobs/${job}/gene/${encodeURIComponent(g)}`);if(!r.ok){status.textContent=g+" is not in this dataset.";return}const d=await r.json();
+  vals=d.values;let mx=0;for(const v of vals)mx=Math.max(mx,v);const best=d.cluster_means.indexOf(Math.max(...d.cluster_means));
+  mode="gene";cats=null;status.innerHTML=`<b>${esc(d.gene)}</b> detected in ${(100*d.pct_expressing).toFixed(1)}% of cells; highest in <b>${esc(E.clusters[best])}</b>.`;
+  leg.innerHTML=`<div class="grad"></div><div class="row between hint"><span>0</span><span>${mx.toFixed(1)} log1p</span></div><div class="leg" style="margin-top:6px">${d.cluster_means.map((m,k)=>`<div class="row between hint" style="gap:6px"><span style="display:flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:2px;background:${E.colors[k]}"></i>${esc(E.clusters[k])}</span><span class="mono">${m.toFixed(2)}</span></div>`).join("")}</div>`;
+  vals.__max=mx||1;draw()}
+ function setMode(m){mode=m;hidden.clear();
+  if(m==="cluster"){cats={codes:E.cluster,levels:E.clusters,colors:E.colors};status.textContent=`${E.x.length.toLocaleString()} cells · ${E.clusters.length} clusters`}
+  else if(m.startsWith("c:")){const k=m.slice(2),d=E.categorical[k];cats={codes:d.codes,levels:d.levels,colors:d.levels.map((_,i)=>["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"][i%10])}}
+  else if(m.startsWith("n:")){vals=E.numeric[m.slice(2)].slice();const s=vals.slice().sort((a,b)=>a-b);vals.__max=s[Math.floor(s.length*.99)]||1;cats=null}
+  if(cats){leg.innerHTML=`<div class="leg">${cats.levels.map((l,i)=>`<button data-i="${i}"><i style="background:${cats.colors[i]}"></i>${esc(l)}</button>`).join("")}</div>`;leg.querySelectorAll("button").forEach(b=>b.onclick=()=>{const i=+b.dataset.i;hidden.has(i)?hidden.delete(i):hidden.add(i);b.classList.toggle("off");draw()})}
+  else if(m.startsWith("n:"))leg.innerHTML=`<div class="grad"></div><div class="row between hint"><span>low</span><span>${vals.__max.toFixed(1)}</span></div>`;
+  draw()}
+ function resize(){const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;draw()}
+ function proj(){const pad=24,b=bounds,sc=Math.min((W-2*pad)/(b.x1-b.x0),(H-2*pad)/(b.y1-b.y0))*view.s;const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2;return[x=>W/2+(x-cx)*sc+view.x,y=>H/2-(y-cy)*sc+view.y]}
+ function draw(){if(!E||!W)return;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);ctx.clearRect(0,0,W,H);const[px,py]=proj();const n=E.x.length,r=Math.max(1.2,Math.min(4,2.2*Math.sqrt(3000/n)))*Math.sqrt(view.s);
+  let order=[...Array(n).keys()];if(!cats&&vals)order.sort((a,b)=>vals[a]-vals[b]);pts=new Float32Array(n*2);const muted=css("--line");
+  for(const i of order){const x=px(E.x[i]),y=py(E.y[i]);pts[2*i]=x;pts[2*i+1]=y;let col;
+   if(cats){if(hidden.has(cats.codes[i]))continue;col=cats.colors[cats.codes[i]]}else{const v=vals[i];col=mode==="gene"&&v===0?muted:vir(v/vals.__max)}
+   ctx.fillStyle=col;ctx.fillRect(x-r/2,y-r/2,r,r)}
+  if(mode==="cluster"){ctx.font="600 12px Geist, sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";const K=E.clusters.length,sx=new Float64Array(K),sy=new Float64Array(K),cn=new Float64Array(K);for(let i=0;i<n;i++){const k=E.cluster[i];sx[k]+=pts[2*i];sy[k]+=pts[2*i+1];cn[k]++}
+   for(let k=0;k<K;k++){if(!cn[k]||hidden.has(k))continue;const t=E.clusters[k].length>22?E.clusters[k].split(":")[0]:E.clusters[k];const w=ctx.measureText(t).width+10;ctx.fillStyle=css("--panel");ctx.globalAlpha=.85;ctx.beginPath();ctx.roundRect(sx[k]/cn[k]-w/2,sy[k]/cn[k]-10,w,20,6);ctx.fill();ctx.globalAlpha=1;ctx.fillStyle=css("--ink");ctx.fillText(t,sx[k]/cn[k],sy[k]/cn[k])}}}
+ new ResizeObserver(resize).observe(cv);window.addEventListener("themechange",draw);matchMedia("(prefers-color-scheme: dark)").addEventListener("change",draw);
+ cv.addEventListener("wheel",e=>{e.preventDefault();const r=cv.getBoundingClientRect(),mx=e.clientX-r.left-W/2,my=e.clientY-r.top-H/2,f=e.deltaY<0?1.15:1/1.15;view.x=mx-(mx-view.x)*f;view.y=my-(my-view.y)*f;view.s*=f;draw()},{passive:false});
+ let drag=null;cv.addEventListener("pointerdown",e=>{drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};cv.setPointerCapture(e.pointerId)});cv.addEventListener("pointerup",()=>drag=null);
+ cv.addEventListener("pointermove",e=>{if(drag){view.x=drag.vx+e.clientX-drag.x;view.y=drag.vy+e.clientY-drag.y;draw();return}if(!pts)return;const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let b=-1,bd=64;for(let i=0;i<E.x.length;i++){const d=(pts[2*i]-x)**2+(pts[2*i+1]-y)**2;if(d<bd){bd=d;b=i}}
+  const tip=$("#tip");if(b<0){tip.hidden=true;return}let t=E.clusters[E.cluster[b]];if(mode!=="cluster"&&cats)t+=" · "+cats.levels[cats.codes[b]];if(!cats&&vals)t+=" · "+(+vals[b]).toFixed(2);t+=` · ${E.numeric.n_genes_by_counts[b]|0} genes`;tip.textContent=t;tip.hidden=false;tip.style.left=Math.min(e.clientX+12,innerWidth-tip.offsetWidth-8)+"px";tip.style.top=e.clientY+14+"px"});
+ cv.addEventListener("pointerleave",()=>$("#tip").hidden=true);
+ c.querySelector("[data-z=reset]").onclick=()=>{view={s:1,x:0,y:0};draw()};return c}
+
+/* adjust & re-run drawer */
+function openTune(R){const P=R.params||{};const scrim=el("div","scrim"),d=el("div","drawer");
+ let body="";
+ if(R.kind==="sc"){body=`<div class="form">
+  <label>Min genes / cell<input type="number" id="t_min_genes" value="${P.min_genes??""}"></label><label>Max genes / cell<input type="number" id="t_max_genes" value="${P.max_genes??""}"></label>
+  <label>Max mitochondrial %<input type="number" step="0.5" id="t_max_mt" value="${P.max_mt??""}"></label><label>Highly variable genes<input type="number" id="t_n_hvg" value="${P.n_hvg??2000}"></label>
+  <label class="full">Leiden resolution <span class="mono" id="t_resv">${P.resolution??0.5}</span><input type="range" id="t_resolution" min="0.1" max="2" step="0.05" value="${P.resolution??0.5}"></label>
+  <label>Batch column<input type="text" id="t_batch_key" value="${esc(P.batch_key||"")}"></label><label>PCs for graph<input type="number" id="t_n_pcs" placeholder="auto"></label>
+  <label>Sample column (pseudobulk)<input type="text" id="t_sample_key" value="${esc(P.sample_key||"")}" list="t_obs"></label><label>Condition column<input type="text" id="t_condition_key" value="${esc(P.condition_key||"")}" list="t_obs"></label>
+  <datalist id="t_obs">${(P.obs_columns||[]).map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+  <label class="cb full"><input type="checkbox" id="t_doublets" ${P.doublets!==false?"checked":""}> Remove doublets (Scrublet)</label>
+  <p class="hint full" style="margin:0">Auto thresholds for this dataset: ${P.auto?`${P.auto.min_genes}–${P.auto.max_genes} genes, ≤${P.auto.max_mt}% mito`:"—"}.</p></div>`}
+ else{const opts=(arr,v)=>arr.map(x=>`<option ${x===v?"selected":""}>${esc(x)}</option>`).join("");const lv=(P.levels||{})[P.factor]||[];
+  body=`<div class="form"><label class="full">Design factor<select id="t_factor">${opts(P.columns||[],P.factor)}</select></label>
+  <label>Reference<select id="t_reference">${opts(lv,P.reference)}</select></label><label>Compare<select id="t_alternative">${opts(lv,P.alternative)}</select></label>
+  <label class="full">Covariates (adjust for)<div class="row" id="t_cov">${(P.columns||[]).filter(c=>c!==P.factor).map(c=>`<label class="cb"><input type="checkbox" value="${esc(c)}" ${(P.covariates||[]).includes(c)?"checked":""}> ${esc(c)}</label>`).join("")||'<span class="hint">No other metadata columns</span>'}</div></label>
+  <label>FDR (padj)<input type="number" step="0.01" id="t_alpha" value="${P.alpha??0.05}"></label><label>|log2FC| ≥<input type="number" step="0.25" id="t_lfc" value="${P.lfc??1}"></label></div>`}
+ d.innerHTML=`<div class="dh"><h3>Adjust & re-run</h3><button class="btn ghost sm" data-x aria-label="Close">✕</button></div><div class="db">${body}</div><div class="df"><button class="btn" data-x>Cancel</button><button class="btn accent" id="t_go">Re-run analysis</button></div>`;
+ document.body.append(scrim,d);const close=()=>{scrim.remove();d.remove()};scrim.onclick=close;d.querySelectorAll("[data-x]").forEach(b=>b.onclick=close);
+ const rs=d.querySelector("#t_resolution");if(rs)rs.oninput=()=>d.querySelector("#t_resv").textContent=rs.value;
+ const fs=d.querySelector("#t_factor");if(fs)fs.onchange=()=>{const lv=P.levels[fs.value]||[];d.querySelector("#t_reference").innerHTML=lv.map(x=>`<option>${esc(x)}</option>`).join("");d.querySelector("#t_alternative").innerHTML=lv.map((x,i)=>`<option ${i===1?"selected":""}>${esc(x)}</option>`).join("")};
+ d.querySelector("#t_go").onclick=async()=>{const p={};if(R.kind==="sc"){for(const k of["min_genes","max_genes","max_mt","n_hvg","n_pcs"]){const v=d.querySelector("#t_"+k).value;if(v!=="")p[k]=+v}p.resolution=+rs.value;p.batch_key=d.querySelector("#t_batch_key").value.trim()||null;p.doublets=d.querySelector("#t_doublets").checked?"auto":false;p.sample_key=d.querySelector("#t_sample_key").value.trim()||null;p.condition_key=d.querySelector("#t_condition_key").value.trim()||null}
+  else{p.factor=fs.value;p.reference=d.querySelector("#t_reference").value;p.alternative=d.querySelector("#t_alternative").value;p.covariates=[...d.querySelectorAll("#t_cov input:checked")].map(x=>x.value);p.alpha=+d.querySelector("#t_alpha").value;p.lfc=+d.querySelector("#t_lfc").value;if(p.reference===p.alternative){toast("Reference and compare levels must differ.");return}}
+  close();const fd=new FormData();fd.append("params",JSON.stringify(p));showRunning(R.kind,"Re-running with new settings…");
+  const r=await fetch(`/api/rerun/${S.job}`,{method:"POST",body:fd});const j=await r.json();startPoll(j.job,j.kind)};
+}
+
+/* GEO import */
+$("#geoList").onclick=async()=>{const acc=$("#geoAcc").value.trim();if(!acc)return;$("#geoFiles").hidden=false;$("#geoFiles").innerHTML='<label class="hint" style="padding:8px 10px">Contacting GEO…</label>';
+ try{const r=await fetch("/api/geo/list",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accession:acc})});if(!r.ok)throw new Error((await r.json()).detail||r.statusText);const j=await r.json();
+  if(!j.files.length){$("#geoFiles").innerHTML='<label class="hint" style="padding:8px 10px">No files listed — check the accession.</label>';return}
+  const isData=f=>/count|matrix|expected|umi|expr|tpm|fpkm|feature|h5ad|\.h5$|loom|processed|raw_?data/i.test(f.name)&&!/tar$/.test(f.name)&&!/series_matrix/i.test(f.name);
+  const hasData=j.files.some(isData);
+  const fmtSz=x=>{const n=parseFloat(x);if(!x||isNaN(n))return x||"";if(/[KMG]$/.test(x))return x;return n>=1e9?(n/1e9).toFixed(2)+" GB":n>=1e6?(n/1e6).toFixed(0)+" MB":n>=1e3?(n/1e3).toFixed(0)+" KB":n+" B"};
+  $("#geoFiles").innerHTML=j.files.map((f,i)=>{const chk=f.url&&(/series_matrix/i.test(f.name)||isData(f)||(!hasData&&/_RAW\.tar$/i.test(f.name)));return `<label><input type="checkbox" value="${esc(f.url)}" ${chk?"checked":""} ${f.url?"":"disabled"}><span>${esc(f.name)}</span><span class="sz">${esc(fmtSz(f.size))}</span></label>`}).join("");
+  $("#geoRun").hidden=false;const big=j.files.filter(f=>f.url&&parseFloat(f.size)>2e9).map(f=>f.name);$("#geoRun").querySelector(".hint").textContent=big.length?`Large files (${big.join(", ")}) can take a while and need free disk space.`:"Pre-ticked: the counts/matrix file (or RAW.tar when that is the only data) plus the series matrix for sample annotations.";}
+ catch(e){$("#geoFiles").innerHTML=`<label class="hint" style="padding:8px 10px">${esc(e.message)}</label>`}};
+$("#geoGo").onclick=async()=>{const urls=[...$("#geoFiles").querySelectorAll("input:checked")].map(x=>x.value);if(!urls.length){toast("Tick at least one file.");return}const acc=$("#geoAcc").value.trim();
+ const kind=S.kind;showRunning(kind==="auto"?"bulk":kind,"Downloading from GEO…");const r=await fetch("/api/geo/import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accession:acc,urls,kind,params:collectParams(kind==="auto"?"bulk":kind)})});const j=await r.json();startPoll(j.job,j.kind==="auto"?"bulk":j.kind)};
+
+/* code viewer */
+async function openCode(job){const w=el("div","codewrap");w.innerHTML=`<div class="files"><div class="navlabel">This analysis</div><a data-k="script" class="on">reproduce_analysis.py</a><div class="navlabel">Pipeline source</div><div id="srcList"></div></div>
+ <div class="body"><div class="bar"><h3 id="codeTitle">reproduce_analysis.py</h3><button class="btn sm" id="copyCode">Copy</button><a class="btn sm" id="dlCode" download>Download</a><button class="btn ghost sm" id="closeCode">✕</button></div><div class="desc" id="codeDesc"></div><pre id="codePre">Loading…</pre></div>`;
+ document.body.appendChild(w);const close=()=>w.remove();w.querySelector("#closeCode").onclick=close;document.addEventListener("keydown",function k(e){if(e.key==="Escape"){close();document.removeEventListener("keydown",k)}});
+ const pre=w.querySelector("#codePre"),title=w.querySelector("#codeTitle"),desc=w.querySelector("#codeDesc");let cur="";
+ const show=(name,text,d)=>{cur=text;title.textContent=name;desc.textContent=d;pre.textContent=text;w.querySelector("#dlCode").href=URL.createObjectURL(new Blob([text],{type:"text/plain"}));w.querySelector("#dlCode").download=name.split("/").pop()};
+ w.querySelector("#copyCode").onclick=()=>{navigator.clipboard.writeText(cur).then(()=>toast("Copied"))};
+ const src=await (await fetch("/api/source")).json();
+ w.querySelector("#srcList").innerHTML=Object.keys(src).map(k=>`<a data-k="${esc(k)}">${esc(k)}</a>`).join("");
+ const DESC={"server/bulk_pipeline.py":"Bulk RNA-seq: DESeq2 model, QC, PCA, volcano, heatmaps, enrichment and the plain-language flags.","server/sc_pipeline.py":"Single-cell: QC thresholds, doublets, normalization, HVGs, PCA, Harmony, UMAP, Leiden, markers, annotation.","server/pseudobulk.py":"Sample-level tests for single-cell: composition (Mann–Whitney) and pseudobulk DESeq2 per cell type.","server/io_utils.py":"File readers: h5ad/10x/loom/dense tables, technical-replicate collapsing, sex inference, Ensembl mapping.","server/geo.py":"GEO series-matrix parsing, GEO downloads, Ensembl gene tables.","server/agent.py":"The in-app Claude assistant and its tools.","server/codegen.py":"Generates the reproducible script you see under 'This analysis'.","server/markers.py":"Cell-type marker panels and cell-cycle gene lists.","server/report.py":"PDF report builder.","server/app.py":"HTTP API.","web/index.html":"This user interface.","server/common.py":"Job bookkeeping and figure helpers.","server/demo.py":"Example datasets."};
+ w.querySelectorAll(".files a").forEach(a=>a.onclick=async()=>{w.querySelectorAll(".files a").forEach(x=>x.classList.toggle("on",x===a));const k=a.dataset.k;
+  if(k==="script"){show("reproduce_analysis.py",job?await (await fetch(`/api/jobs/${job}/script`)).text():"# Open an analysis first to get its reproducible script.","A standalone script with the exact parameters of this analysis, written with plain Scanpy / PyDESeq2 calls so you can read, edit and rerun it anywhere.")}
+  else show(k,src[k],DESC[k]||"")});
+ w.querySelector('.files a[data-k="script"]').click()}
+$("#codeBtn").onclick=e=>{e.preventDefault();openCode(S.job)};
+
+/* settings */
+async function openSettings(){const cur=await (await fetch("/api/settings")).json();const m=el("div","modal");m.innerHTML=`<div class="box"><h3>Settings</h3>
+ <label>Anthropic API key <input type="password" id="st_key" placeholder="${cur.has_key?"Saved ("+esc(cur.key_hint)+") — paste to replace":"sk-ant-…"}"></label>
+ <label>Model <select id="st_model">${[cur.model].map(x=>`<option selected>${esc(x)}</option>`).join("")}</select></label>
+ <div class="row"><button class="btn sm" id="st_test">Test key &amp; list models</button><span class="hint" id="st_msg"></span></div>
+ <p class="hint" style="margin:0">The key is stored only on this computer (~/.rnaseq-bench/config.json) and is used solely for the assistant. Get one at console.anthropic.com.</p>
+ <div class="row" style="justify-content:flex-end"><button class="btn" id="st_cancel">Cancel</button><button class="btn accent" id="st_save">Save</button></div></div>`;
+ document.body.appendChild(m);m.querySelector("#st_cancel").onclick=()=>m.remove();m.onclick=e=>{if(e.target===m)m.remove()};
+ const fillModels=(list,sel)=>{const se=m.querySelector("#st_model");se.innerHTML=list.map(x=>`<option ${x===sel?"selected":""}>${esc(x)}</option>`).join("");if(!list.includes(sel))se.insertAdjacentHTML("afterbegin",`<option selected>${esc(sel)}</option>`)};
+ fetch("/api/models").then(r=>r.json()).then(j=>{fillModels(j.models,cur.model);m.querySelector("#st_msg").textContent=j.ok?"Key works.":(cur.has_key?"Key check failed: "+j.error:"")}).catch(()=>{});
+ m.querySelector("#st_test").onclick=async()=>{const k=m.querySelector("#st_key").value.trim();const msg=m.querySelector("#st_msg");msg.textContent="Checking…";if(k){await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({api_key:k})});m.querySelector("#st_key").value="";m.querySelector("#st_key").placeholder="Saved — paste to replace"}
+  const j=await (await fetch("/api/models")).json();fillModels(j.models,m.querySelector("#st_model").value);msg.textContent=j.ok?`Key works — ${j.models.length} models available.`:"Key check failed: "+(j.error||"no key")};
+ m.querySelector("#st_save").onclick=async()=>{const body={model:m.querySelector("#st_model").value};const k=m.querySelector("#st_key").value.trim();if(k)body.api_key=k;const r=await (await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();toast(r.has_key?"Saved":"Saved (no API key yet)");m.remove()}}
+$("#settingsBtn").onclick=e=>{e.preventDefault();openSettings()};
+$("#quitBtn").onclick=async e=>{e.preventDefault();if(!confirm("Stop RNAseq Bench? Finished analyses stay on disk; a running one would be lost."))return;await fetch("/api/quit",{method:"POST"}).catch(()=>{});document.body.innerHTML='<div style="font:15px system-ui;padding:60px;text-align:center;color:#6a7b84">RNAseq Bench has stopped. Double-click the app to start it again — you can close this tab.</div>'};
+
+/* assistant */
+const CONV=Math.random().toString(36).slice(2);
+const chat=$("#chat");
+function openChat(){chat.classList.add("open");document.body.classList.add("chat-open");$("#chatIn").focus()}
+function closeChat(){chat.classList.remove("open");document.body.classList.remove("chat-open")}
+$("#fab").onclick=openChat;$("#chatClose").onclick=closeChat;
+$("#chatReset").onclick=async()=>{await fetch("/api/agent/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({conv:CONV,message:""})});$("#chatBody").innerHTML='<div class="msg ai"><p>New conversation.</p></div>'};
+function setChips(R){const c=R.kind==="sc"?["Explain the clusters to me","Which QC flags matter most?","Re-run at resolution 1.0","Plot CD3E, MS4A1 and LYZ on the UMAP"]:["Summarize the key findings","Is the design confounded?","Add sex as a covariate and re-run","Plot the top 6 genes per sample"];
+ $("#chips").innerHTML=c.map(t=>`<button>${esc(t)}</button>`).join("");$("#chips").querySelectorAll("button").forEach(b=>b.onclick=()=>{$("#chatIn").value=b.textContent;send()})}
+setChips({kind:"bulk"});
+function md(t){let h=esc(t);h=h.replace(/```(\w*)\n([\s\S]*?)```/g,(m,l,c)=>`<pre><code>${c}</code></pre>`).replace(/`([^`]+)`/g,"<code>$1</code>").replace(/^### (.*)$/gm,"<h3>$1</h3>").replace(/^## (.*)$/gm,"<h2>$1</h2>").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/^\s*[-•] (.*)$/gm,"<li>$1</li>").replace(/(<li>.*<\/li>\n?)+/g,m=>`<ul>${m}</ul>`).replace(/^\d+\. (.*)$/gm,"<li>$1</li>");
+ h=h.replace(/\b([\w\-]+\.png)\b/g,(m,f)=>S.job?`${m}<br><img src="${F(S.job,f)}?t=${Date.now()}" alt="${f}" onerror="this.remove()">`:m);
+ return h.split(/\n{2,}/).map(p=>p.startsWith("<")?p:`<p>${p.replace(/\n/g,"<br>")}</p>`).join("")}
+async function send(){const t=$("#chatIn").value.trim();if(!t||S.chatBusy)return;S.chatBusy=true;$("#chatIn").value="";const body=$("#chatBody");
+ body.appendChild(el("div","msg user",esc(t)));const ai=el("div","msg ai","");body.appendChild(ai);let buf="",cur=el("div");ai.appendChild(cur);body.scrollTop=body.scrollHeight;$("#chatHint").textContent="Thinking…";
+ try{const r=await fetch("/api/agent/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({conv:CONV,message:t,job:S.job})});
+  const rd=r.body.getReader(),dec=new TextDecoder();let rest="";
+  while(true){const{value,done}=await rd.read();if(done)break;rest+=dec.decode(value,{stream:true});const parts=rest.split("\n\n");rest=parts.pop();
+   for(const p of parts){if(!p.startsWith("data: "))continue;const ev=JSON.parse(p.slice(6));
+    if(ev.type==="text"){buf+=ev.text;cur.innerHTML=md(buf)}
+    else if(ev.type==="tool"){const d=el("details","toolcard");d.innerHTML=`<summary><i class="run"></i><b>${esc(ev.name)}</b><span class="hint">${esc(JSON.stringify(ev.input)).slice(0,90)}</span></summary><pre>${esc(JSON.stringify(ev.input,null,1))}</pre>`;ai.appendChild(d);buf="";cur=el("div");ai.appendChild(cur);$("#chatHint").textContent="Running "+ev.name+"…"}
+    else if(ev.type==="tool_result"){const d=[...ai.querySelectorAll(".toolcard")].pop();if(d){d.querySelector("i").classList.remove("run");d.querySelector("pre").textContent+="\n— result —\n"+ev.text}
+     if(/rerun_analysis/.test(ev.name)){try{const j=JSON.parse(ev.text);if(j.job){toast("Re-run started — opening it when done");watchJob(j.job)}}catch{}}
+     if(/run_python/.test(ev.name)&&/new files/.test(ev.text))refreshFigures()}
+    else if(ev.type==="error"){cur.innerHTML=`<p style="color:var(--warn)">${esc(ev.text)}</p>`}
+    body.scrollTop=body.scrollHeight}}}
+ catch(e){cur.innerHTML=`<p style="color:var(--warn)">${esc(e.message)}</p>`}
+ S.chatBusy=false;$("#chatHint").textContent=""}
+$("#chatSend").onclick=send;$("#chatIn").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
+function watchJob(job){const t=setInterval(async()=>{const s=await (await fetch(`/api/jobs/${job}/status`)).json();if(s.state==="done"){clearInterval(t);loadResult(job);toast("Re-run finished")}else if(s.state==="error"){clearInterval(t);toast("Re-run failed: "+(s.error||""))}},1500)}
+function refreshFigures(){}
+
+/* boot */
+syncForms();renderRecent();
+const m=location.hash.match(/job=([\w]+)/);if(m)loadResult(m[1]);
+fetch("/api/settings").then(r=>r.json()).then(s=>{const v=document.getElementById("appVersion");if(v&&s.version)v.textContent="v"+s.version;}).catch(()=>{});
+</script>
+</body>
+</html>

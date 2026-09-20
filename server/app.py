@@ -1,0 +1,245 @@
+"""RNAseq Bench web server.  Run:  uvicorn server.app:app --port 8765"""
+from __future__ import annotations
+
+import json
+import os
+import threading
+import uuid
+from functools import lru_cache
+from pathlib import Path
+
+import numpy as np
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from . import agent, bulk_pipeline, codegen, demo, geo, sc_pipeline
+from .common import Job, run_safely
+from .io_utils import guess_kind, unpack_archives
+
+ROOT = Path(__file__).resolve().parent.parent
+JOBS = Path(os.environ.get("TL_HOME", ROOT)) / "jobs"
+JOBS.mkdir(parents=True, exist_ok=True)
+VERSION = (ROOT / "VERSION").read_text().strip() if (ROOT / "VERSION").exists() else "dev"
+app = FastAPI(title="RNAseq Bench", version=VERSION)
+print(f"RNAseq Bench {VERSION} — jobs in {JOBS} — python {__import__('platform').python_version()}", flush=True)
+_lock = threading.Semaphore(1)  # one heavy analysis at a time
+
+
+def _start(kind: str, files: list[Path], name: str, params: dict, job_dir: Path):
+    job = Job(job_dir, kind, name)
+    (job_dir / "request.json").write_text(json.dumps({"kind": kind, "name": name, "params": params, "files": [str(f) for f in files]}))
+
+    def work():
+        with _lock:
+            run_safely(job, sc_pipeline.run if kind == "sc" else bulk_pipeline.run, files, params)
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"job": job_dir.name, "kind": kind}
+
+
+@app.post("/api/analyze")
+async def analyze(files: list[UploadFile] = File(...), kind: str = Form("auto"), params: str = Form("{}")):
+    jid = uuid.uuid4().hex[:10]
+    d = JOBS / jid
+    (d / "input").mkdir(parents=True)
+    saved = []
+    for f in files:
+        p = d / "input" / Path(f.filename).name
+        with open(p, "wb") as out:
+            while chunk := await f.read(1 << 20):
+                out.write(chunk)
+        saved.append(p)
+    saved = unpack_archives(saved, d / "input")
+    k = guess_kind(saved) if kind == "auto" else kind
+    name = " + ".join(Path(f.filename).name for f in files)
+    return _start(k, saved, name, json.loads(params or "{}"), d)
+
+
+def _rerun(jid: str, params: dict):
+    req = json.loads((JOBS / jid / "request.json").read_text())
+    nid = uuid.uuid4().hex[:10]
+    d = JOBS / nid
+    d.mkdir(parents=True)
+    return _start(req["kind"], [Path(p) for p in req["files"]], req["name"], {**req["params"], **params}, d)
+
+
+@app.post("/api/rerun/{jid}")
+async def rerun(jid: str, params: str = Form("{}")):
+    return _rerun(jid, json.loads(params))
+
+
+# ---------------------------------------------------------------- GEO import
+class GeoList(BaseModel):
+    accession: str
+
+
+class GeoImport(BaseModel):
+    accession: str
+    urls: list[str]
+    kind: str = "auto"
+    params: dict = {}
+
+
+@app.post("/api/geo/list")
+def geo_list(body: GeoList):
+    try:
+        return geo.list_geo_files(body.accession)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"{type(e).__name__}: {e}")
+
+
+@app.post("/api/geo/import")
+def geo_import(body: GeoImport):
+    jid = uuid.uuid4().hex[:10]
+    d = JOBS / jid
+    (d / "input").mkdir(parents=True)
+    job = Job(d, "bulk", body.accession)
+    job.set_status("running", 1, "Downloading from GEO…")
+
+    def work():
+        try:
+            files = geo.download_geo_files(body.urls, d / "input",
+                                          progress=lambda i, n, name: job.set_status("running", 1 + int(8 * i / max(n, 1)), f"Downloading {name}"))
+            files = unpack_archives(files, d / "input")
+            k = guess_kind(files) if body.kind == "auto" else body.kind
+            (d / "request.json").write_text(json.dumps({"kind": k, "name": body.accession.upper(), "params": body.params, "files": [str(f) for f in files]}))
+            job2 = Job(d, k, body.accession.upper())
+            with _lock:
+                run_safely(job2, sc_pipeline.run if k == "sc" else bulk_pipeline.run, files, body.params)
+        except Exception as e:  # noqa: BLE001
+            job.set_status("error", 100, "Stopped", error=f"{type(e).__name__}: {e}")
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"job": jid, "kind": body.kind}
+
+
+# ---------------------------------------------------------------- code & settings
+@app.get("/api/jobs/{jid}/script", response_class=PlainTextResponse)
+def job_script(jid: str):
+    try:
+        return codegen.script_for_job(JOBS / jid)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(404, f"{type(e).__name__}: {e}")
+
+
+@app.get("/api/source")
+def source():
+    return codegen.pipeline_sources()
+
+
+class Settings(BaseModel):
+    api_key: str | None = None
+    model: str | None = None
+
+
+@app.get("/api/settings")
+def get_settings():
+    cfg = geo.load_settings()
+    key = cfg.get("api_key") or os.environ.get("ANTHROPIC_API_KEY") or ""
+    return {"version": VERSION, "has_key": bool(key), "key_hint": (key[:7] + "…" + key[-4:]) if key else "", "model": cfg.get("model") or agent.DEFAULT_MODEL}
+
+
+@app.post("/api/settings")
+def set_settings(body: Settings):
+    d = {k: v for k, v in body.model_dump().items() if v}
+    geo.save_settings(d)
+    return get_settings()
+
+
+@app.post("/api/quit")
+def quit_server():
+    """Stop the server (sidebar 'Quit'). Runs jobs are lost, finished ones stay on disk."""
+    import threading as _t
+    _t.Timer(0.5, lambda: os._exit(0)).start()
+    return {"ok": True}
+
+
+@app.get("/api/models")
+def list_models():
+    """Models the saved key can use (also verifies the key). Falls back to a static list."""
+    return agent.available_models()
+
+
+# ---------------------------------------------------------------- agent
+class ChatIn(BaseModel):
+    conv: str
+    message: str
+    job: str | None = None
+
+
+@app.post("/api/agent/chat")
+def agent_chat(body: ChatIn):
+    return StreamingResponse(agent.chat(body.conv, body.message, body.job, _rerun), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/agent/reset")
+def agent_reset(body: ChatIn):
+    agent.reset(body.conv)
+    return {"ok": True}
+
+
+@app.post("/api/demo/{which}")
+def run_demo(which: str):
+    jid = uuid.uuid4().hex[:10]
+    d = JOBS / jid
+    if which == "sc":
+        f, name = demo.pbmc3k(d / "input")
+        return _start("sc", [f], name, {}, d)
+    if which == "bulk":
+        fs, name = demo.airway(d / "input")
+        return _start("bulk", fs, name, {}, d)
+    raise HTTPException(404)
+
+
+@app.get("/api/jobs/{jid}/status")
+def status(jid: str):
+    p = JOBS / jid / "status.json"
+    if not p.exists():
+        raise HTTPException(404, "Unknown job")
+    return JSONResponse(json.loads(p.read_text()))
+
+
+@app.get("/api/jobs/{jid}/result")
+def result(jid: str):
+    p = JOBS / jid / "result.json"
+    if not p.exists():
+        raise HTTPException(404, "Result not ready")
+    r = json.loads(p.read_text())
+    r["job"] = jid
+    return JSONResponse(r)
+
+
+@lru_cache(maxsize=2)
+def _adata(jid: str):
+    import scanpy as sc
+    return sc.read_h5ad(JOBS / jid / "analyzed.h5ad")
+
+
+@app.get("/api/jobs/{jid}/gene/{gene}")
+def gene(jid: str, gene: str):
+    a = _adata(jid)
+    emb = json.loads((JOBS / jid / "embedding.json").read_text())
+    names = {g.upper(): g for g in a.var_names}
+    g = names.get(gene.upper())
+    if g is None:
+        raise HTTPException(404, f"{gene} is not in this dataset")
+    col = a[:, g].X
+    v = np.asarray(col.toarray() if hasattr(col, "toarray") else col).ravel()[emb["index"]]
+    cl = a.obs["leiden"].cat.codes.values
+    means = [float(v[np.asarray(emb["cluster"]) == k].mean()) if (np.asarray(emb["cluster"]) == k).any() else 0 for k in range(len(emb["clusters"]))]
+    return {"gene": g, "values": np.round(v, 3).tolist(), "cluster_means": means, "pct_expressing": float((v > 0).mean())}
+
+
+@app.get("/api/jobs/{jid}/files/{path:path}")
+def files(jid: str, path: str):
+    p = (JOBS / jid / path).resolve()
+    if not str(p).startswith(str((JOBS / jid).resolve())) or not p.exists():
+        raise HTTPException(404)
+    dl = p.suffix in (".pdf", ".h5ad", ".csv")
+    return FileResponse(p, filename=p.name if dl else None)
+
+
+app.mount("/", StaticFiles(directory=ROOT / "web", html=True), name="web")
