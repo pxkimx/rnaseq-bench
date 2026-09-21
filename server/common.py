@@ -79,10 +79,21 @@ class Job:
         fig = fig or plt.gcf()
         png = self.fig_dir / f"{fid}.png"
         fig.savefig(png, dpi=200, facecolor="white")
+        # A vector copy as well. Journals want vector for anything with text in it, and a 200 dpi raster
+        # is what gets a figure sent back at proof stage. The big scatters are already drawn with
+        # rasterized=True, so points stay as an embedded image while axes, labels and gene names stay
+        # editable text — the file stays small and opens in Illustrator or Inkscape.
+        vector = False
+        try:
+            fig.savefig(self.fig_dir / f"{fid}.pdf", facecolor="white", bbox_inches="tight")
+            vector = True
+        except Exception:  # noqa: BLE001 - a figure that will not vectorise must not lose its PNG
+            log_exc(f"vector export {fid}")
         plt.close("all")
         self._section["items"].append({
             "type": "figure", "id": fid, "title": title, "sub": sub,
             "src": f"figures/{fid}.png", "how": how, "yours": yours, "wide": wide,
+            **({"vector": f"figures/{fid}.pdf"} if vector else {}),
         })
 
     def table(self, tid, title, columns, rows, note="", csv=None):

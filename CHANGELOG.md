@@ -1,5 +1,12 @@
 # RNAseq Bench changelog
 
+## 3.2.9
+- **Every figure can now be downloaded as vector PDF**, next to the PNG. Journals want vector for
+  anything containing text, and a 200 dpi raster is what gets a figure sent back at proof stage. The
+  large scatters are drawn rasterized, so points stay an embedded image while axes, tick labels and gene
+  names remain editable text — the volcano PDF is smaller than its PNG and opens in Illustrator or
+  Inkscape for figure assembly.
+
 ## 3.2.8
 - **RNAseq Bench — created by Paul H. Kim, Ph.D.** The byline appears under the title, in the sidebar, on
   every page of the PDF report and in the header of every generated script.
