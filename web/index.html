@@ -464,7 +464,13 @@ ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-
                 <label>Sample column (pseudobulk)<input type="text" id="s_sample_key" placeholder="auto (sample, plate…)"></label>
                 <label>Condition column<input type="text" id="s_condition_key" placeholder="auto (genotype, condition…)"></label>
                 <label class="cb"><input type="checkbox" id="s_doublets" checked> Remove doublets (auto-off for plate-based)</label>
-                <label class="cb"><input type="checkbox" id="s_integrate" checked> Harmony batch integration</label>
+                <label>Batch correction
+                  <select id="s_integrate" title="Auto measures how separated your batches are and picks. Harmony corrects the components in seconds; scVI models counts with batch and library size and takes minutes, but handles uneven sequencing depth far better.">
+                    <option value="auto" selected>Auto</option>
+                    <option value="harmony">Harmony</option>
+                    <option value="scvi">scVI</option>
+                    <option value="off">Off</option>
+                  </select></label>
                 <label class="cb full"><input type="checkbox" id="s_pseudobulk" checked> Composition test + pseudobulk DESeq2 when a condition exists</label>
               </div>
               <div id="bulkForm" class="form" hidden>
@@ -677,7 +683,7 @@ const size=b=>b>1e9?(b/1e9).toFixed(1)+" GB":b>1e6?(b/1e6).toFixed(1)+" MB":Math
 function addFiles(fl){for(const f of fl)if(!S.files.some(x=>x.name===f.name))S.files.push(f);renderFiles()}
 function renderFiles(){const L=$("#fileList");L.innerHTML="";S.files.forEach((f,i)=>{const r=el("div","file",`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg><span class="n">${esc(f.name)}</span><span class="s">${size(f.size)}</span>`);const x=el("button","btn ghost sm","✕");x.setAttribute("aria-label","Remove "+f.name);x.onclick=()=>{S.files.splice(i,1);renderFiles()};r.appendChild(x);L.appendChild(r)});$("#runBtn").disabled=!S.files.length;syncForms()}
 function collectParams(kind){const p={};if(kind==="bulk"){for(const k of["factor","reference","alternative","groups"]){const v=$("#b_"+k).value.trim();if(v)p[k]=v}const cv=$("#b_covariates").value.trim();if(cv)p.covariates=cv.split(",").map(s=>s.trim()).filter(Boolean);p.alpha=+$("#b_alpha").value||.05;p.lfc=+$("#b_lfc").value||1;p.enrichment=$("#b_enrichment").checked;p.collapse_replicates=$("#b_collapse").value;p.infer_sex=$("#b_infer_sex").checked}
- else{for(const k of["min_genes","max_genes","max_mt","n_hvg","n_pcs"]){const v=$("#s_"+k).value;if(v!=="")p[k]=+v}p.resolution=+$("#s_resolution").value;const b=$("#s_batch_key").value.trim();if(b)p.batch_key=b;p.doublets=$("#s_doublets").checked?"auto":false;p.integrate=$("#s_integrate").checked;p.pseudobulk=$("#s_pseudobulk").checked;const sk=$("#s_sample_key").value.trim(),ck=$("#s_condition_key").value.trim();if(sk)p.sample_key=sk;if(ck)p.condition_key=ck}return p}
+ else{for(const k of["min_genes","max_genes","max_mt","n_hvg","n_pcs"]){const v=$("#s_"+k).value;if(v!=="")p[k]=+v}p.resolution=+$("#s_resolution").value;const b=$("#s_batch_key").value.trim();if(b)p.batch_key=b;p.doublets=$("#s_doublets").checked?"auto":false;p.integrate=$("#s_integrate").value;p.pseudobulk=$("#s_pseudobulk").checked;const sk=$("#s_sample_key").value.trim(),ck=$("#s_condition_key").value.trim();if(sk)p.sample_key=sk;if(ck)p.condition_key=ck}return p}
 $("#runBtn").onclick=async()=>{const kind=S.kind==="auto"?guessKind():S.kind;const fd=new FormData();S.files.forEach(f=>fd.append("files",f));fd.append("kind",S.kind);fd.append("params",JSON.stringify(collectParams(kind)));
  showRunning(kind,"Uploading "+S.files.length+" file"+(S.files.length>1?"s":"")+"…");
  try{const r=await fetch("/api/analyze",{method:"POST",body:fd});if(!r.ok)throw new Error(await r.text());const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError("Upload failed: "+e.message)}};

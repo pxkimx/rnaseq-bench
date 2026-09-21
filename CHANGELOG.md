@@ -1,5 +1,10 @@
 # RNAseq Bench changelog
 
+## 3.5.3
+- The batch-correction choice is now on the upload form as well, not only in a finished analysis's
+  Parameters section: Auto, Harmony, scVI or Off. It had been left as a "Harmony batch integration"
+  checkbox, so scVI could only be picked by re-analyzing.
+
 ## 3.5.1
 - **Fixed a marker panel that had been mislabelling ordinary clusters as proliferating.** The panel was
   MKI67, TOP2A, STMN1 and TUBA1B — but tubulin and stathmin are broadly expressed, TUBA1B in 40–90% of
