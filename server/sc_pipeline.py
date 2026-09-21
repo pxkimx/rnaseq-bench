@@ -116,13 +116,14 @@ def annotate_clusters(adata, cluster_key="leiden", layer="log1p"):
             margin = r - (max(other) if other else -1.0)
             # 0.90 with a clear margin: on real data, clusters of one type sit at 0.91-1.00 with each
             # other while genuinely different types top out below 0.80
-            # Profile similarity alone lets one label spread across a whole neighbourhood of clusters:
-            # on a finely divided epithelium it produced eight clusters all called "Proliferating".
-            # Require some direct marker support for that same panel too, so similarity can only
-            # confirm a weak call, never manufacture one.
+            # Similarity may confirm a weak call but must not manufacture one, so the cluster's own
+            # best match has to be the same cell type and carry at least some positive support. The
+            # threshold stays low on purpose: measured against real rescues, requiring 0.5 here threw
+            # away three of five correct ones, including a cluster matching at r = 0.99. What was
+            # actually producing wrong labels was the proliferation panel, fixed in markers.py.
             lbl = base[best_c]
             own = float(S.loc[c, lbl]) if lbl in S.columns else -1.0
-            if r >= 0.90 and margin >= 0.05 and own >= 0.5 and S.loc[c].idxmax() == lbl:
+            if r >= 0.90 and margin >= 0.05 and own >= 0.3 and S.loc[c].idxmax() == lbl:
                 used[lbl] = used.get(lbl, 0) + 1
                 out[c] = (lbl, out[c][1], out[best_c][2])
                 by_similarity.append(c)

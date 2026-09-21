@@ -7,7 +7,7 @@
   clusters "Proliferating" where MKI67 was detected in 2% of cells. Replaced with markers specific to
   cells actually in S/G2/M. A genuinely cycling population still scores 2.58 with MKI67 in 67% of its
   cells; the false one drops to 0.30, below any label.
-- A cluster named by profile similarity rather than its own markers now needs firmer direct support.
+- A cluster named by profile similarity must now have the same cell type as its own best match, rather than only a matching expression profile.
 
 ## 3.5
 - **scVI is available as a second integration method, and the app measures which one your data needs.**
