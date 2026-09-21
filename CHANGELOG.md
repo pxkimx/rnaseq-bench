@@ -1,5 +1,19 @@
 # RNAseq Bench changelog
 
+## 3.2.4
+Found while comparing a run against a published choroid plexus figure.
+
+- **Choroid plexus epithelium, ependymal cells and pericytes are now in the marker panel.** The generic
+  EPCAM/keratin epithelial panel does not describe a brain-barrier epithelium, so on a choroid plexus
+  dataset the largest population — 78% of the cells — came back as "Unassigned" and the annotation bore
+  no resemblance to the published one. Those clusters are now labelled.
+- **Ambient RNA is now reported.** Transcripts from lysed cells end up in every droplet, and in a tissue
+  with one dominant secretory population that is severe: in the dataset above TTR was 9.5% of all counts
+  and was detected in 100% of the macrophages, neurons, pericytes and endothelial cells, none of which
+  transcribe it. Nothing fails, so it is invisible unless you look — every population simply resembles
+  the dominant one and the map separates poorly. The run now names the genes responsible and points at
+  CellBender/SoupX/DecontX, which must be run on the raw droplets before analysis here.
+
 ## 3.2.3
 - **Your past analyses are listed on the home page again — all of them.** The list used to come from the
   browser's own storage and only recorded runs you had opened yourself in that browser, so anything

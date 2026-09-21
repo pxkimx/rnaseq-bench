@@ -28,6 +28,13 @@ CELL_TYPE_MARKERS = {
     "Keratinocyte": ["KRT5", "KRT14", "KRT1", "KRT10"],
     "Melanocyte": ["PMEL", "MLANA", "TYR"],
     "Neuron": ["SNAP25", "SYT1", "RBFOX3", "STMN2"],
+    # brain barriers: the choroid plexus and ependyma are epithelia, but they share almost nothing with
+    # the EPCAM/keratin panel above, so without these they come back as "Unassigned"
+    "Choroid plexus epithelium": ["TTR", "FOLR1", "CLIC6", "HTR2C", "KCNJ13", "OTX2", "PRLR", "AQP1"],
+    "Ependymal": ["FOXJ1", "PIFO", "CCDC153", "TMEM212", "HDC", "SPAG17"],
+    # pericytes are usually reported separately from smooth muscle; these markers exclude the
+    # contractile genes (ACTA2/MYH11/TAGLN) that define a true VSMC
+    "Pericyte": ["PDGFRB", "KCNJ8", "HIGD1B", "ABCC9", "PTH1R", "RGS5"],
     "Astrocyte": ["GFAP", "AQP4", "SLC1A3", "ALDH1L1"],
     "Oligodendrocyte": ["MBP", "PLP1", "MOG", "MOBP"],
     "OPC": ["PDGFRA", "OLIG1", "OLIG2", "CSPG4"],

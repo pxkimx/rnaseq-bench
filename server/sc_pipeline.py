@@ -474,6 +474,34 @@ def run(job: Job, files: list[Path], params: dict):
     if integrated:
         job.flag("info", f"{nb} batches (<b>{batch_key}</b>) were integrated with Harmony before clustering.")
 
+    # Ambient ("soup") RNA: transcripts released by lysed cells end up in every droplet. In a tissue with
+    # one overwhelmingly dominant secretory population this is severe — and invisible unless you look,
+    # because it does not fail anything, it just makes every population resemble the dominant one.
+    try:
+        cnt = adata.layers["counts"]
+        share = np.asarray(cnt.sum(0)).ravel()
+        share = share / max(share.sum(), 1)
+        cl_codes = adata.obs["leiden"].cat.codes.values
+        soup = []
+        for gi in np.argsort(-share)[:25]:
+            if share[gi] < 0.01:
+                break
+            col = np.asarray(cnt[:, gi].todense()).ravel() if sp.issparse(cnt) else np.asarray(cnt[:, gi]).ravel()
+            det = [float((col[cl_codes == k] > 0).mean()) for k in range(K)]
+            if min(det) > 0.5:                       # present in most cells of even the least-expressing cluster
+                soup.append((adata.var_names[gi], share[gi], min(det)))
+        if soup:
+            worst = ", ".join(f"<b>{g}</b> ({100*sh:.1f}% of all counts, detected in {100*d:.0f}% of the cells of "
+                              f"every cluster)" for g, sh, d in soup[:3])
+            job.flag("warn",
+                     f"Ambient RNA looks substantial: {worst}. Transcripts that leak from lysed cells end up in "
+                     "every droplet, so every population carries some of the dominant cell type's signature and "
+                     "the populations separate less cleanly than they should. This analysis does not correct for "
+                     "it — to remove it, run CellBender, SoupX or DecontX on the raw droplet matrix first and "
+                     "analyze the corrected counts here.")
+    except Exception:  # noqa: BLE001
+        log_exc("ambient check")
+
     # A cluster made almost entirely of one sample is usually that sample's technical character rather
     # than a cell type — most often a library sequenced far less deeply than the others, which integration
     # cannot merge because the difference is in how much was detected, not in which genes.
