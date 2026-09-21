@@ -1,5 +1,41 @@
 # RNAseq Bench changelog
 
+## 3.2.1
+Everything here was found by running v3.2.0: on real GEO data, and on the packaged Mac app rather than
+from source.
+
+Fixes — the Mac app
+- **Downloads that need the network now work.** The app's Python ships no CA certificates and does not
+  read the keychain, so every `urllib` download failed with a certificate error: PROGENy and CollecTRI
+  reported "needs internet" on machines that had internet, while gene sets (which use a different HTTP
+  library) worked. All TLS clients now use certifi.
+- The launcher installs the expert add-on packages separately from the ones the app needs to run, so a
+  failure there can no longer stop the app from starting, and it cannot downgrade numpy/pandas/scanpy to
+  satisfy an add-on.
+- `liana` (cell–cell communication) is unavailable on this stack: releases new enough for the current
+  anndata require pandas 2, and the rest of the analysis runs on pandas 3. The step now says so plainly
+  instead of failing with a type error; nothing else is affected.
+- build_mac.sh wrote the versioned zip one directory above the app.
+
+Fixes found by running real GEO data (GSE113957)
+- **Only the first GEO series matrix was read.** A series sequenced on two instruments ships one per
+  platform; the smaller one sorted first, matched almost nothing, and every sample annotation was
+  discarded. All series matrices are now merged.
+- **With no metadata, samples were split into arbitrary halves called A and B** and compared as though
+  that meant something. That split is now refused with instructions, and a name-inferred grouping is
+  flagged for checking rather than reported as fact.
+- **RefSeq gene IDs (NM_/NR_) are now mapped to symbols** (UCSC refGene). Without this, gene sets,
+  PROGENy and CollecTRI matched nothing and reported themselves as skipped.
+- Numeric annotation columns such as `Copies` were analysed as if they were samples.
+- GEO characteristics are free text: ages like `8yr` or `2yr3mos` made the whole column non-numeric, so
+  a continuous variable became a 77-level categorical; `Male`/`male` were separate levels. Both are now
+  cleaned, and the merge is reported.
+- The generated script now sets its own certificate bundle, and each optional step runs under a guard so
+  one unavailable resource prints "[skipped] …" instead of ending the script.
+- Sub-clustering reported the number of cells left after quality control as though it were the number
+  selected.
+- Changing only the compared level so that it matched the reference was not caught before re-analysis.
+
 ## 3.2
 New — expert analyses
 - **Bulk**: pre-ranked GSEA (Hallmark, GO BP, KEGG, Reactome); PROGENy pathway and CollecTRI
@@ -26,32 +62,6 @@ Fixes
 - The generated script covers the expert add-ons that a job actually ran, and its requirements line
   lists the packages they need.
 - The PDF report header said TRANSCRIPT LENS.
-- **Downloads that need the network now work on the Mac app.** Its Python ships no CA certificates and
-  does not read the keychain, so every `urllib` download failed with a certificate error — PROGENy and
-  CollecTRI reported "needs internet" on machines that had internet. All TLS clients now use certifi.
-- The launcher installs the expert add-on packages separately from the ones the app needs to run, so a
-  failure there can no longer stop the app from starting, and it cannot downgrade numpy/pandas/scanpy to
-  satisfy an add-on.
-- `liana` (cell–cell communication) is unavailable on this stack: releases new enough for the current
-  anndata require pandas 2, and the rest of the analysis runs on pandas 3. The step says so plainly;
-  nothing else is affected.
-- build_mac.sh wrote the versioned zip one directory above the app.
-
-Fixes found by running real GEO data (GSE113957)
-- **Only the first GEO series matrix was read.** A series sequenced on two instruments ships one per
-  platform; the smaller one sorted first, matched almost nothing, and every sample annotation was
-  discarded. All series matrices are now merged.
-- **With no metadata, samples were split into arbitrary halves called A and B** and compared as though
-  that meant something. That split is now refused with instructions, and a name-inferred grouping is
-  flagged for checking rather than reported as fact.
-- **RefSeq gene IDs (NM_/NR_) are now mapped to symbols** (UCSC refGene). Without this, gene sets,
-  PROGENy and CollecTRI matched nothing and reported themselves as skipped.
-- Numeric annotation columns such as `Copies` were analysed as if they were samples.
-- GEO characteristics are free text: ages like `8yr` or `2yr3mos` made the whole column non-numeric, so
-  a continuous variable became a 77-level categorical; `Male`/`male` were separate levels. Both are now
-  cleaned, and the merge is reported.
-- The generated script now sets its own certificate bundle, and each optional step runs under a guard so
-  one unavailable resource prints "[skipped] …" instead of ending the script.
 - Pipeline-derived cell columns (qc_pass, leiden, …) are no longer offered as batch, sample or
   condition columns.
 

@@ -37,7 +37,7 @@ Owner: Paul (biologist, learning the analyses — explain the *why* in plain lan
 - Cells are not replicates: single-cell DE between conditions is pseudobulk per sample.
 - Mac app runs `launch.sh` (arm64 re-exec guard, venv rebuild guard, requirements hash → reinstall).
 
-## v3.2 status
+## v3.2 status (shipped 3.2.0; 3.2.1 is the real-data / packaged-app fix round)
 Shipped and tested on the synthetic datasets in `tests/`: bulk GSEA prerank, PROGENy/CollecTRI activity
 (contrast + per-sample), genes-of-interest, covariate-adjusted PCA; sc feature plots, UMAP split by condition,
 alluvials, PROGENy per population, PAGA + DPT, LIANA, silhouette per resolution, sub-clustering
