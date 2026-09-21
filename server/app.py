@@ -194,6 +194,37 @@ def run_demo(which: str):
     raise HTTPException(404)
 
 
+@app.get("/api/jobs")
+def list_jobs(limit: int = 60):
+    """Every analysis on disk, newest first.
+
+    The UI used to remember past runs in the browser's own storage, so anything started from another
+    browser, from the assistant or from a re-run you had not opened yourself was simply unreachable —
+    there was no way to get back to it without knowing its id.
+    """
+    rows = []
+    if JOBS.exists():
+        for d in sorted(JOBS.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+            if not d.is_dir() or not (d / "request.json").exists():
+                continue
+            try:
+                req = json.loads((d / "request.json").read_text())
+                st = json.loads((d / "status.json").read_text()) if (d / "status.json").exists() else {}
+                row = {"job": d.name, "kind": req.get("kind"), "name": req.get("name") or d.name,
+                       "state": st.get("state"), "t": d.stat().st_mtime * 1000}
+                if (d / "result.json").exists():
+                    res = json.loads((d / "result.json").read_text())
+                    row["summary"] = res.get("summary")
+                elif st.get("state") == "error":
+                    row["error"] = (st.get("error") or "")[:160]
+                rows.append(row)
+            except Exception:  # noqa: BLE001 - a half-written job must not break the list
+                continue
+            if len(rows) >= limit:
+                break
+    return rows
+
+
 @app.get("/api/jobs/{jid}/status")
 def status(jid: str):
     p = JOBS / jid / "status.json"

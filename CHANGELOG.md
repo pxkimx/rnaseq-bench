@@ -1,5 +1,13 @@
 # RNAseq Bench changelog
 
+## 3.2.3
+- **Your past analyses are listed on the home page again — all of them.** The list used to come from the
+  browser's own storage and only recorded runs you had opened yourself in that browser, so anything
+  started by the assistant, re-run from the Parameters section, or opened elsewhere was unreachable
+  without knowing its id. It now comes from the server (`GET /api/jobs`), and each card shows what the
+  run found (cells and clusters, or genes up and down), its id and its date. Runs that ended in an
+  error are listed too, greyed out, with the reason.
+
 ## 3.2.2
 Found while reproducing a published figure from GEO: GSE264154.
 
