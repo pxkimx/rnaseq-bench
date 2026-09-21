@@ -58,6 +58,8 @@ aside.side{position:sticky;top:0;height:100vh;border-right:1px solid var(--line)
 .side .foot{margin-top:auto;display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px;padding:0 6px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-weight:550;cursor:pointer;text-decoration:none;color:var(--ink);white-space:nowrap;transition:border-color .15s,background .15s,transform .05s}
 .btn:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.6)}
+.btn:disabled:hover{border-color:var(--line)}
 .btn:active{transform:translateY(1px)}
 .btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .btn.primary:hover{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -342,6 +344,12 @@ ol.flow .what{margin:0 0 8px;font-size:13.5px;line-height:1.55;color:var(--ink2)
 ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-left:2px solid var(--accent);padding-left:10px}
 #workflow .flowfoot{margin:18px 0 40px;max-width:70ch}
 @media (max-width:820px){ol.flow li{grid-template-columns:28px minmax(0,1fr)}ol.flow .ill{grid-column:1/-1}}
+#confirmRow{margin:2px 0 0;padding:0 2px}
+#confirmRow label{font-size:12.5px;color:var(--ink2)}
+#confirmRow.need label{color:var(--warn);font-weight:600}
+#confirmRow.need{animation:nudge .35s ease}
+@keyframes nudge{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@media (prefers-reduced-motion: reduce){#confirmRow.need{animation:none}}
 .zoomctl .btn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .selbox{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
 .selbox .selhead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
@@ -451,6 +459,14 @@ ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-
               <input type="file" id="fileInput" multiple hidden>
             </label>
             <div class="files" id="fileList"></div>
+            <details class="settings" id="geoBox">
+              <summary>Import from GEO by accession</summary>
+              <div class="geo" style="padding:4px 12px 14px">
+                <div class="row"><input type="text" id="geoAcc" placeholder="GSE306264" style="flex:1;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel2)"><button class="btn sm" id="geoList">List files</button></div>
+                <div class="list" id="geoFiles" hidden></div>
+                <div class="row between" id="geoRun" hidden><span class="hint">Tick the counts file (and series matrix for sample annotations)</span><button class="btn accent sm" id="geoGo">Download &amp; analyze</button></div>
+              </div>
+            </details>
             <details class="settings" id="settings">
               <summary>Analysis settings</summary>
               <div id="scForm" class="form">
@@ -486,15 +502,10 @@ ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-
                 <label class="cb full"><input type="checkbox" id="b_enrichment" checked> Pathway enrichment (Enrichr, needs internet)</label>
               </div>
             </details>
+            <div class="row" id="confirmRow">
+              <label class="cb"><input type="checkbox" id="confirmChk"> I have checked the analysis settings above</label>
+            </div>
             <button class="btn accent" id="runBtn" disabled style="height:42px">Run analysis</button>
-            <details class="settings" id="geoBox">
-              <summary>Import from GEO by accession</summary>
-              <div class="geo" style="padding:4px 12px 14px">
-                <div class="row"><input type="text" id="geoAcc" placeholder="GSE306264" style="flex:1;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel2)"><button class="btn sm" id="geoList">List files</button></div>
-                <div class="list" id="geoFiles" hidden></div>
-                <div class="row between" id="geoRun" hidden><span class="hint">Tick the counts file (and series matrix for sample annotations)</span><button class="btn accent sm" id="geoGo">Download &amp; analyze</button></div>
-              </div>
-            </details>
             <div class="examples">
               <button class="ex" id="demoSc"><span class="k">Single-cell example</span><b>PBMC 3k</b><small>2,700 blood cells · 10x Genomics · the Seurat/Scanpy tutorial set</small></button>
               <button class="ex" id="demoBulk"><span class="k">Bulk example</span><b>GSE96870</b><small>22 mouse cerebellum samples · influenza vs uninfected</small></button>
@@ -681,10 +692,28 @@ zone.addEventListener("drop",e=>addFiles(e.dataTransfer.files));
 $("#fileInput").onchange=e=>{addFiles(e.target.files);e.target.value=""};
 const size=b=>b>1e9?(b/1e9).toFixed(1)+" GB":b>1e6?(b/1e6).toFixed(1)+" MB":Math.max(1,Math.round(b/1e3))+" KB";
 function addFiles(fl){for(const f of fl)if(!S.files.some(x=>x.name===f.name))S.files.push(f);renderFiles()}
-function renderFiles(){const L=$("#fileList");L.innerHTML="";S.files.forEach((f,i)=>{const r=el("div","file",`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg><span class="n">${esc(f.name)}</span><span class="s">${size(f.size)}</span>`);const x=el("button","btn ghost sm","✕");x.setAttribute("aria-label","Remove "+f.name);x.onclick=()=>{S.files.splice(i,1);renderFiles()};r.appendChild(x);L.appendChild(r)});$("#runBtn").disabled=!S.files.length;syncForms()}
+/* Defaults are adaptive and usually right, but "usually" is not good enough when a run takes minutes
+   and every choice shapes the result. The settings sit above this box and have to be acknowledged before
+   anything starts — and editing one clears the acknowledgement, so a change cannot slip through. */
+function settingsOK(){
+ if($("#confirmChk").checked)return true;
+ $("#settings").open=true;
+ $("#confirmRow").classList.add("need");
+ $("#confirmRow").scrollIntoView({block:"center",behavior:"smooth"});
+ setTimeout(()=>$("#confirmRow").classList.remove("need"),700);
+ toast("Check the analysis settings, then tick the box to start.");
+ return false;
+}
+$("#confirmChk").onchange=()=>{$("#runBtn").disabled=!S.files.length||!$("#confirmChk").checked;
+ $("#confirmRow").classList.remove("need")};
+$("#settings").addEventListener("input",()=>{        // a change after confirming needs confirming again
+ if($("#confirmChk").checked){$("#confirmChk").checked=false;$("#confirmChk").onchange();
+  toast("Settings changed — confirm them again before running.")}});
+
+function renderFiles(){const L=$("#fileList");L.innerHTML="";S.files.forEach((f,i)=>{const r=el("div","file",`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg><span class="n">${esc(f.name)}</span><span class="s">${size(f.size)}</span>`);const x=el("button","btn ghost sm","✕");x.setAttribute("aria-label","Remove "+f.name);x.onclick=()=>{S.files.splice(i,1);renderFiles()};r.appendChild(x);L.appendChild(r)});$("#runBtn").disabled=!S.files.length||!$("#confirmChk").checked;syncForms()}
 function collectParams(kind){const p={};if(kind==="bulk"){for(const k of["factor","reference","alternative","groups"]){const v=$("#b_"+k).value.trim();if(v)p[k]=v}const cv=$("#b_covariates").value.trim();if(cv)p.covariates=cv.split(",").map(s=>s.trim()).filter(Boolean);p.alpha=+$("#b_alpha").value||.05;p.lfc=+$("#b_lfc").value||1;p.enrichment=$("#b_enrichment").checked;p.collapse_replicates=$("#b_collapse").value;p.infer_sex=$("#b_infer_sex").checked}
  else{for(const k of["min_genes","max_genes","max_mt","n_hvg","n_pcs"]){const v=$("#s_"+k).value;if(v!=="")p[k]=+v}p.resolution=+$("#s_resolution").value;const b=$("#s_batch_key").value.trim();if(b)p.batch_key=b;p.doublets=$("#s_doublets").checked?"auto":false;p.integrate=$("#s_integrate").value;p.pseudobulk=$("#s_pseudobulk").checked;const sk=$("#s_sample_key").value.trim(),ck=$("#s_condition_key").value.trim();if(sk)p.sample_key=sk;if(ck)p.condition_key=ck}return p}
-$("#runBtn").onclick=async()=>{const kind=S.kind==="auto"?guessKind():S.kind;const fd=new FormData();S.files.forEach(f=>fd.append("files",f));fd.append("kind",S.kind);fd.append("params",JSON.stringify(collectParams(kind)));
+$("#runBtn").onclick=async()=>{if(!settingsOK())return;const kind=S.kind==="auto"?guessKind():S.kind;const fd=new FormData();S.files.forEach(f=>fd.append("files",f));fd.append("kind",S.kind);fd.append("params",JSON.stringify(collectParams(kind)));
  showRunning(kind,"Uploading "+S.files.length+" file"+(S.files.length>1?"s":"")+"…");
  try{const r=await fetch("/api/analyze",{method:"POST",body:fd});if(!r.ok)throw new Error(await r.text());const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError("Upload failed: "+e.message)}};
 $("#demoSc").onclick=()=>demo("sc");$("#demoBulk").onclick=()=>demo("bulk");
@@ -1263,7 +1292,7 @@ $("#geoList").onclick=async()=>{const acc=$("#geoAcc").value.trim();if(!acc)retu
   $("#geoFiles").innerHTML=j.files.map((f,i)=>{const chk=f.url&&(/series_matrix/i.test(f.name)||isData(f)||(!hasData&&/_RAW\.tar$/i.test(f.name)));return `<label><input type="checkbox" value="${esc(f.url)}" ${chk?"checked":""} ${f.url?"":"disabled"}><span>${esc(f.name)}</span><span class="sz">${esc(fmtSz(f.size))}</span></label>`}).join("");
   $("#geoRun").hidden=false;const big=j.files.filter(f=>f.url&&parseFloat(f.size)>2e9).map(f=>f.name);$("#geoRun").querySelector(".hint").textContent=big.length?`Large files (${big.join(", ")}) can take a while and need free disk space.`:"Pre-ticked: the counts/matrix file (or RAW.tar when that is the only data) plus the series matrix for sample annotations.";}
  catch(e){$("#geoFiles").innerHTML=`<label class="hint" style="padding:8px 10px">${esc(e.message)}</label>`}};
-$("#geoGo").onclick=async()=>{const urls=[...$("#geoFiles").querySelectorAll("input:checked")].map(x=>x.value);if(!urls.length){toast("Tick at least one file.");return}const acc=$("#geoAcc").value.trim();
+$("#geoGo").onclick=async()=>{const urls=[...$("#geoFiles").querySelectorAll("input:checked")].map(x=>x.value);if(!urls.length){toast("Tick at least one file.");return}if(!settingsOK())return;const acc=$("#geoAcc").value.trim();
  const kind=S.kind;showRunning(kind==="auto"?"bulk":kind,"Downloading from GEO…");const r=await fetch("/api/geo/import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accession:acc,urls,kind,params:collectParams(kind==="auto"?"bulk":kind)})});const j=await r.json();startPoll(j.job,j.kind==="auto"?"bulk":j.kind)};
 
 /* code viewer */

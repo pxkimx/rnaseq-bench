@@ -1,5 +1,15 @@
 # RNAseq Bench changelog
 
+## 3.6
+- **The analysis settings now sit below the data, and have to be acknowledged before anything runs.**
+  They used to sit above the upload box where they were easy to scroll past, and both Run analysis and
+  GEO's Download & analyze would start straight from the defaults. The order is now data, then settings,
+  then a confirmation, then the button. Changing a setting after confirming clears the confirmation, so
+  an edit cannot slip through unseen, and the GEO path is gated the same way — it is the one that costs
+  a download as well as a run.
+- Disabled buttons now look disabled. The Run button greys out until there are files and the settings
+  have been confirmed; it previously stayed fully coloured while doing nothing when clicked.
+
 ## 3.5.3
 - The batch-correction choice is now on the upload form as well, not only in a finished analysis's
   Parameters section: Auto, Harmony, scVI or Off. It had been left as a "Harmony batch integration"
