@@ -17,7 +17,7 @@ import scipy.sparse as sp
 
 from .common import PALETTE, Job, UserFacingError, commas, fmt_n, pct, style, log_exc
 from .io_utils import load_single_cell
-from .markers import CELL_TYPE_MARKERS, G2M_GENES, S_GENES
+from .markers import CELL_TYPE_MARKERS, DISSOCIATION_GENES, G2M_GENES, S_GENES
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -378,6 +378,17 @@ def run(job: Job, files: list[Path], params: dict):
     if has_cc:
         sc.tl.score_genes_cell_cycle(adata, s_genes=s_g, g2m_genes=g2m_g, random_state=0)
 
+    # dissociation stress: warm enzymatic dissociation switches on immediate-early and heat-shock genes
+    # within minutes, and the cells that respond most can cluster together and pass for a cell type
+    diss_g = [upper[g] for g in DISSOCIATION_GENES if g in upper]
+    has_diss = len(diss_g) >= 15
+    if has_diss:
+        try:
+            sc.tl.score_genes(adata, diss_g, score_name="dissociation_score", ctrl_size=50, random_state=0)
+        except Exception:  # noqa: BLE001
+            has_diss = False
+            log_exc("dissociation score")
+
     job.section("hvg", "Step 2", "Feature selection & dimensionality reduction",
                 f"Counts were scaled to 10,000 per cell and log-transformed. {n_hvg:,} highly variable genes ({hvg_method}) were scaled and "
                 "reduced with PCA; the kNN graph built on the top PCs drives UMAP and Leiden clustering.")
@@ -505,6 +516,30 @@ def run(job: Job, files: list[Path], params: dict):
     if integrated:
         job.flag("info", f"{nb} batches (<b>{batch_key}</b>) were integrated with Harmony before clustering.")
 
+    # Dissociation stress. Reported per cluster rather than per cell: a handful of stressed cells changes
+    # nothing, but a whole cluster of them is an artefact of how the tissue was handled and will otherwise
+    # be interpreted as a population.
+    if has_diss:
+        try:
+            ds = adata.obs.groupby("leiden", observed=True)["dissociation_score"].mean()
+            hi = ds.idxmax()
+            spread = float(ds.max() - ds.median())
+            n_hi = int((adata.obs["leiden"] == hi).sum())
+            if spread > 0.25 and n_hi >= 0.02 * adata.n_obs:
+                job.flag("warn",
+                         f"Cluster <b>{hi}</b> ({fmt_n(n_hi)} cells) scores highest for the dissociation stress "
+                         "signature — immediate-early and heat-shock genes (FOS, JUN, EGR1, HSPA1A…) that tissue "
+                         "switches on within minutes of warm enzymatic digestion. Cells that respond most strongly "
+                         "cluster together and can pass for a cell type. Check its markers before naming it; "
+                         "dissociating at 4 °C, or on ice with a cold-active protease, avoids this "
+                         "(van den Brink et al. 2017).")
+            elif spread > 0.15:
+                job.flag("info", "Some clusters carry more of the dissociation stress signature (immediate-early and "
+                                 "heat-shock genes) than others — worth a glance before interpreting them as "
+                                 "distinct populations, though the difference here is mild.")
+        except Exception:  # noqa: BLE001
+            log_exc("dissociation flag")
+
     # Ambient ("soup") RNA: transcripts released by lysed cells end up in every droplet. In a tissue with
     # one overwhelmingly dominant secretory population this is severe — and invisible unless you look,
     # because it does not fail anything, it just makes every population resemble the dominant one.
@@ -586,7 +621,7 @@ def run(job: Job, files: list[Path], params: dict):
                yours=f"Largest cluster is <b>{sizes.index[0]}</b> ({pct(sizes.iloc[0], adata.n_obs)} of cells)."
                      + (f" Rare clusters (<2%): {', '.join(small)}." if small else ""))
 
-    qc_keys = ["n_genes_by_counts", "total_counts", "pct_counts_mt"] + (["doublet_score"] if "doublet_score" in adata.obs else []) + (["phase"] if has_cc else []) + ([batch_key] if batch_key and nb > 1 else [])
+    qc_keys = ["n_genes_by_counts", "total_counts", "pct_counts_mt"] + (["doublet_score"] if "doublet_score" in adata.obs else []) + (["dissociation_score"] if has_diss else []) + (["phase"] if has_cc else []) + ([batch_key] if batch_key and nb > 1 else [])
     sc.pl.umap(adata, color=qc_keys, ncols=3, frameon=False, show=False, cmap="viridis", size=max(3, 80000 / adata.n_obs / 3), wspace=0.35)
     fig = plt.gcf()
     cc_txt = ""
@@ -824,6 +859,9 @@ def run(job: Job, files: list[Path], params: dict):
     job.method("Feature selection", f"sc.pp.highly_variable_genes, flavor={hvg_method.split()[0]}, n_top_genes={n_hvg}" + (f", batch_key={batch_key}" if nb > 1 else "") + ".")
     if has_cc:
         job.method("Cell cycle", "sc.tl.score_genes_cell_cycle with Tirosh et al. (2016) S and G2/M gene lists.")
+    if has_diss:
+        job.method("Dissociation stress", f"sc.tl.score_genes over {len(diss_g)} immediate-early and heat-shock genes "
+                                          "from van den Brink et al. (2017), scored per cell and summarised per cluster.")
     job.method("PCA", f"Scaled to unit variance (clipped at 10); ARPACK PCA with {n_comps} components; {n_pcs} used (elbow + 5).")
     if integrated:
         job.method("Integration", f"Harmony (harmonypy) on PCA, batch = {batch_key}.")

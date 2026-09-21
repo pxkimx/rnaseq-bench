@@ -62,3 +62,19 @@ G2M_GENES = ["HMGB2", "CDK1", "NUSAP1", "UBE2C", "BIRC5", "TPX2", "TOP2A", "NDC8
              "CDC20", "TTK", "CDC25C", "KIF2C", "RANGAP1", "NCAPD2", "DLGAP5", "CDCA2", "CDCA8",
              "ECT2", "KIF23", "HMMR", "AURKA", "PSRC1", "ANLN", "LBR", "CKAP5", "CENPE", "CTCF",
              "NEK2", "G2E3", "GAS2L3", "CBX5", "CENPA"]
+
+
+# Dissociation-induced stress response (van den Brink et al., Nat Methods 2017). Warm protease
+# dissociation makes cells transcribe immediate-early and heat-shock genes within minutes; the result
+# looks like a distinct population and is routinely mistaken for one. Jovic et al. (Clin Transl Med
+# 2022) name this as a principal pitfall of scRNA-seq and recommend dissociating at 4 degrees.
+# Deliberately limited to immediate-early and chaperone genes: the fuller published list includes
+# genes such as DCN, DES and MT1/MT2 that are genuine markers of fibroblasts, muscle and other
+# populations, and scoring those would flag real cell types as stressed.
+DISSOCIATION_GENES = [
+    "FOS", "FOSB", "JUN", "JUNB", "JUND", "EGR1", "EGR2", "EGR3", "ATF3", "IER2", "IER3", "IER5",
+    "DUSP1", "DUSP5", "ZFP36", "ZFP36L1", "SOCS3", "KLF2", "KLF4", "KLF6", "BTG1", "BTG2", "NR4A1",
+    "PPP1R15A", "CEBPB", "CEBPD", "RHOB", "SGK1", "MCL1", "NFKBIA", "CCN1", "CYR61", "SQSTM1",
+    "HSPA1A", "HSPA1B", "HSPA8", "HSPB1", "HSPH1", "HSP90AA1", "HSP90AB1", "DNAJA1", "DNAJB1",
+    "BAG3", "UBC", "MYC", "PER1", "TNFAIP3",
+]

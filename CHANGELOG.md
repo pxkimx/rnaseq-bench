@@ -1,5 +1,15 @@
 # RNAseq Bench changelog
 
+## 3.2.6
+- **Dissociation stress is now scored and reported.** Warm enzymatic dissociation makes tissue transcribe
+  immediate-early and heat-shock genes (FOS, JUN, EGR1, HSPA1A…) within minutes; the cells that respond
+  most cluster together and are readily mistaken for a cell type. Jovic et al. (Clin Transl Med 2022)
+  name this as a principal pitfall of scRNA-seq. Each cell is scored against the van den Brink et al.
+  (2017) signature, the score appears on the QC UMAP, and a cluster that stands out from the rest is
+  flagged with the remedy — dissociate at 4 °C or with a cold-active protease. The gene set is
+  restricted to immediate-early and chaperone genes: the fuller published list contains genuine markers
+  of fibroblasts and muscle, which would flag real populations as stressed.
+
 ## 3.2.5
 - **The most abundant cell type was the least likely to be named.** Cluster labels are scored as a
   z-score across clusters, so when one population occupies many clusters its markers are high in most of
