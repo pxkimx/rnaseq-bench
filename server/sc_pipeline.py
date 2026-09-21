@@ -122,7 +122,7 @@ def annotate_clusters(adata, cluster_key="leiden", layer="log1p"):
             # confirm a weak call, never manufacture one.
             lbl = base[best_c]
             own = float(S.loc[c, lbl]) if lbl in S.columns else -1.0
-            if r >= 0.90 and margin >= 0.05 and own >= 0.3 and S.loc[c].idxmax() == lbl:
+            if r >= 0.90 and margin >= 0.05 and own >= 0.5 and S.loc[c].idxmax() == lbl:
                 used[lbl] = used.get(lbl, 0) + 1
                 out[c] = (lbl, out[c][1], out[best_c][2])
                 by_similarity.append(c)

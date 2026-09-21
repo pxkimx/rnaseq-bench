@@ -1,5 +1,14 @@
 # RNAseq Bench changelog
 
+## 3.5.1
+- **Fixed a marker panel that had been mislabelling ordinary clusters as proliferating.** The panel was
+  MKI67, TOP2A, STMN1 and TUBA1B — but tubulin and stathmin are broadly expressed, TUBA1B in 40–90% of
+  cells in a post-mitotic epithelium, so they dominated the score. On choroid plexus it named eight
+  clusters "Proliferating" where MKI67 was detected in 2% of cells. Replaced with markers specific to
+  cells actually in S/G2/M. A genuinely cycling population still scores 2.58 with MKI67 in 67% of its
+  cells; the false one drops to 0.30, below any label.
+- A cluster named by profile similarity rather than its own markers now needs firmer direct support.
+
 ## 3.5
 - **scVI is available as a second integration method, and the app measures which one your data needs.**
   Before integrating, it measures two things: how much of a cell's neighbourhood is its own batch beyond

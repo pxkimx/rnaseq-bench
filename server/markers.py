@@ -40,7 +40,10 @@ CELL_TYPE_MARKERS = {
     "OPC": ["PDGFRA", "OLIG1", "OLIG2", "CSPG4"],
     "Microglia": ["P2RY12", "CX3CR1", "TMEM119", "C1QA"],
     "Cardiomyocyte": ["TNNT2", "MYH6", "MYL7", "ACTC1"],
-    "Proliferating": ["MKI67", "TOP2A", "STMN1", "TUBA1B"],
+    # STMN1 and TUBA1B used to be in here and should not have been: tubulin and stathmin are broadly
+    # expressed (TUBA1B in 40-90% of cells in a post-mitotic epithelium), so they dominated the score and
+    # labelled ordinary clusters as cycling. These are specific to cells actually in S/G2/M.
+    "Proliferating": ["MKI67", "TOP2A", "CENPF", "UBE2C", "BIRC5", "CCNB1", "CDK1", "ASPM"],
     # vascular / aorta
     "Modulated SMC (fibromyocyte)": ["LGALS3", "VCAM1", "FN1", "TNFRSF11B", "SPP1", "LUM"],
     "Adventitial fibroblast": ["PI16", "DPT", "CD34", "PDGFRA", "GSN"],
