@@ -1,5 +1,21 @@
 # RNAseq Bench changelog
 
+## 3.2.8
+- **RNAseq Bench — created by Paul H. Kim, Ph.D.** The byline appears under the title, in the sidebar, on
+  every page of the PDF report and in the header of every generated script.
+- **The sidebar tracks a running analysis.** A live card shows what is running, how far along it is and
+  what step it is on, so you can keep reading a finished result — or start from the home page — while
+  another run works. It disappears when the run finishes.
+- **Recent analyses in the sidebar**, for moving between runs without going back to the home page. Runs
+  of the same dataset are labelled with the time they ran, since that is all that distinguishes them.
+- **The running screen shows the cells clustering.** Points start scattered and grey, and settle into
+  coloured groups as the analysis proceeds — driven by real progress, not a timer, so the clusters are
+  only fully formed once clustering has actually happened. The home page animation now re-seeds and
+  re-clusters continuously, with cluster halos fading in once the groups settle. Both respect
+  prefers-reduced-motion.
+- Fixed: **the bulk example failed in the packaged app.** build_mac.sh never copied `examples/` into the
+  bundle, so the home page's GSE96870 button returned a server error — while working fine from source.
+
 ## 3.2.7
 - **Feature plots are drawn the way published ones are.** Cells with no detected expression are light
   grey and only expressing cells are coloured, on a white-to-red scale. On the previous viridis scale

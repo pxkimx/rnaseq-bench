@@ -152,11 +152,11 @@ def build_pdf(root: Path):
     def deco(canvas, doc):
         canvas.saveState()
         canvas.setFont("Helvetica", 7.5); canvas.setFillColor(MUTED)
-        canvas.drawString(margin, 10 * mm, "RNAseq Bench")
+        canvas.drawString(margin, 10 * mm, "RNAseq Bench · created by Paul H. Kim, Ph.D.")
         canvas.drawRightString(W - margin, 10 * mm, f"{doc.page}")
         canvas.setStrokeColor(ACCENT); canvas.setLineWidth(2); canvas.line(margin, H - 10 * mm, margin + 18 * mm, H - 10 * mm)
         canvas.restoreState()
 
     doc = SimpleDocTemplate(str(root / "report.pdf"), pagesize=A4, leftMargin=margin, rightMargin=margin, topMargin=16 * mm, bottomMargin=16 * mm,
-                            title=f"RNAseq Bench report — {res['name']}", author="RNAseq Bench")
+                            title=f"RNAseq Bench report — {res['name']}", author="Paul H. Kim, Ph.D.")
     doc.build(story, onFirstPage=deco, onLaterPages=deco)

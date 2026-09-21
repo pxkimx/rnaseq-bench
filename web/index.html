@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>RNAseq Bench</title>
+<meta name="author" content="Paul H. Kim, Ph.D.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%230f766e'/><circle cx='11' cy='13' r='3' fill='%23a7f3d0'/><circle cx='20' cy='18' r='4' fill='%23fcd34d'/><circle cx='14' cy='21' r='2' fill='%23fda4af'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
@@ -319,6 +320,24 @@ body.chat-open .fab{display:none}
 .tag.fixed{color:var(--info);border-color:color-mix(in srgb,var(--info) 30%,transparent);background:var(--info-soft)}
 .lightbox{position:fixed;inset:0;z-index:70;display:grid;place-items:center;background:rgba(5,12,16,.8);padding:24px;cursor:zoom-out}
 .lightbox img{max-width:100%;max-height:100%;background:#fff;border-radius:12px;padding:12px}
+.runcv{width:100%;height:150px;display:block;margin:14px 0 2px;border-radius:12px;background:var(--panel2);border:1px solid var(--line2)}
+/* sidebar: live job card, quick-switch list, byline */
+.jobcard{border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));border-radius:12px;background:var(--accent-soft);padding:10px;display:flex;flex-direction:column;gap:7px}
+.jobcard .jr-top{display:flex;align-items:center;gap:7px;font-size:12.5px}
+.jobcard .jr-top b{flex:1;font-weight:600;color:var(--accent)}
+.jobcard .jr-top .mono{font-size:11.5px;color:var(--accent)}
+.jobcard .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.25)}}
+.jobcard .jr-msg{font-size:11.5px;color:var(--ink2);line-height:1.35;min-height:2.4em}
+.jobcard .jr-bar{height:4px;border-radius:99px;background:color-mix(in srgb,var(--accent) 22%,transparent);overflow:hidden}
+.jobcard .jr-bar i{display:block;height:100%;width:2%;background:var(--accent);border-radius:99px;transition:width .5s ease}
+.nav.sr a{font-size:12.5px;padding:6px 8px;gap:8px}
+.nav.sr a small{display:block;font:10.5px var(--mono);color:var(--muted)}
+.nav.sr a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side .foot .by{color:var(--ink2);font-weight:600}
+.byline{margin:2px 0 10px;font-size:13px;color:var(--muted)}
+.byline b{color:var(--ink2);font-weight:600}
+@media (prefers-reduced-motion: reduce){.jobcard .dot{animation:none;opacity:.9}}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:80;font-size:13px}
 </style>
 </head>
@@ -332,6 +351,13 @@ body.chat-open .fab{display:none}
     <button class="btn primary" id="newBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New analysis</button>
     <div class="navwrap" id="navWrap" hidden><div class="navlabel">Report</div><nav class="nav" id="nav"></nav></div>
     <div class="dlwrap" id="dlWrap" hidden><div class="navlabel">Downloads</div><div class="dl" id="dl"></div></div>
+    <div class="jobcard" id="sideRunning" hidden>
+      <div class="jr-top"><span class="dot"></span><b id="jr_kind">running</b><span class="mono" id="jr_pct">0%</span></div>
+      <div class="jr-msg" id="jr_msg">Starting</div>
+      <div class="jr-bar"><i id="jr_bar"></i></div>
+      <button class="btn ghost sm" id="jr_open">Watch progress</button>
+    </div>
+    <div class="navwrap" id="sideRecentWrap" hidden><div class="navlabel">Recent</div><nav class="nav sr" id="sideRecent"></nav></div>
     <div class="navwrap" id="toolsWrap"><div class="navlabel">Tools</div><nav class="nav">
       <a href="#" id="codeBtn"><i>&lt;/&gt;</i>View code</a>
       <a href="#" id="settingsBtn"><i>⚙</i>Settings &amp; API key</a>
@@ -339,7 +365,7 @@ body.chat-open .fab{display:none}
     </nav></div>
     <div class="foot">
       <button class="btn ghost sm" id="themeBtn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
-      <span>Runs locally · data stays on your Mac</span>
+      <span>Runs locally · data stays on your Mac<br><b class="by">Created by Paul H. Kim, Ph.D.</b></span>
     </div>
   </aside>
 
@@ -350,8 +376,9 @@ body.chat-open .fab{display:none}
         <canvas id="heroCanvas" aria-hidden="true"></canvas>
         <div class="in">
           <div>
-            <span class="eyebrow">● Scanpy 1.11 · PyDESeq2 · Harmony · Scrublet</span>
+            <span class="eyebrow">● Scanpy · PyDESeq2 · Harmony · Scrublet</span>
             <h1>From count matrix to <em>figures you can publish</em></h1>
+            <p class="byline">RNAseq Bench — created by <b>Paul H. Kim, Ph.D.</b></p>
             <p class="lede">Upload bulk or single-cell RNA-seq. RNAseq Bench runs the standard Scanpy and DESeq2 workflows, draws the plots scientists expect, and explains what each one says about your data.</p>
             <div class="stack">
               <span class="chip">.h5ad</span><span class="chip">10x .h5</span><span class="chip">matrix.mtx + features + barcodes</span><span class="chip">.loom</span><span class="chip">counts .csv / .tsv</span><span class="chip">+ metadata .csv</span><span class="chip">.zip / .tar.gz</span><span class="chip">GEO series matrix</span><span class="chip">Ensembl IDs</span>
@@ -433,6 +460,7 @@ body.chat-open .fab{display:none}
         <h2 style="margin-top:12px" id="runTitle">Analyzing…</h2>
         <div style="color:var(--muted);margin-top:4px" id="runMsg">Starting</div>
         <div class="bar"><i id="runBar" style="width:2%"></i></div>
+        <canvas id="runCanvas" class="runcv" aria-hidden="true"></canvas>
         <ul class="steps" id="runSteps"></ul>
         <div id="runErr"></div>
       </div>
@@ -470,17 +498,67 @@ function toast(m){const t=el("div","toast",esc(m));document.body.appendChild(t);
 $("#themeBtn").onclick=()=>{const cur=document.documentElement.dataset.theme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");const n=cur==="dark"?"light":"dark";document.documentElement.dataset.theme=n;store.set("theme",n);window.dispatchEvent(new Event("themechange"))};
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-/* hero canvas: points condensing into clusters */
-(function hero(){const cv=$("#heroCanvas"),ctx=cv.getContext("2d");const cols=["#14b8a6","#f59e0b","#fb7185","#60a5fa","#a78bfa","#34d399","#f472b6"];let W,H,pts=[],t0=performance.now();
+/* Hero canvas: cells condensing into clusters, then re-seeding and doing it again — the one thing the
+   app does, running quietly behind the title. Halos fade in only once the groups have formed. */
+(function hero(){const cv=$("#heroCanvas"),ctx=cv.getContext("2d");
+ const cols=["#14b8a6","#f59e0b","#fb7185","#60a5fa","#a78bfa","#34d399","#f472b6"];
+ let W,H,pts=[],centers=[],t0=performance.now();
+ const SETTLE=2600,HOLD=4200,CYCLE=SETTLE+HOLD;
  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
- function init(){const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
-  const centers=cols.map((c,i)=>({x:W*(0.3+0.68*Math.random()),y:H*(0.08+0.84*Math.random()),s:10+Math.random()*26}));pts=[];
-  for(let i=0;i<700;i++){const k=Math.floor(Math.pow(Math.random(),1.4)*cols.length),c=centers[k],a=Math.random()*6.283,r=Math.sqrt(-2*Math.log(Math.random()+1e-9))*c.s;pts.push({x0:Math.random()*W,y0:Math.random()*H,x1:c.x+Math.cos(a)*r,y1:c.y+Math.sin(a)*r*.8,k,ph:Math.random()*6.28})}}
- function frame(now){const p=reduce?1:Math.min(1,(now-t0)/2600),e=1-Math.pow(1-p,3);ctx.clearRect(0,0,W,H);
-  for(const q of pts){const wob=reduce?0:Math.sin(now/1400+q.ph)*1.2;const x=q.x0+(q.x1-q.x0)*e+wob,y=q.y0+(q.y1-q.y0)*e+wob;ctx.globalAlpha=.16+.4*e;ctx.fillStyle=cols[q.k];ctx.beginPath();ctx.arc(x,y,1.8,0,6.283);ctx.fill()}
+ function init(){const r=cv.getBoundingClientRect();W=r.width;H=r.height;
+  cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  centers=cols.map(()=>({x:W*(0.3+0.68*Math.random()),y:H*(0.08+0.84*Math.random()),s:10+Math.random()*26}));
+  pts=[];
+  for(let i=0;i<700;i++){const k=Math.floor(Math.pow(Math.random(),1.4)*cols.length),c=centers[k],
+    a=Math.random()*6.283,r2=Math.sqrt(-2*Math.log(Math.random()+1e-9))*c.s;
+   pts.push({x0:Math.random()*W,y0:Math.random()*H,x1:c.x+Math.cos(a)*r2,y1:c.y+Math.sin(a)*r2*.8,k,ph:Math.random()*6.28})}}
+ function frame(now){
+  const dt=now-t0;
+  if(!reduce&&dt>CYCLE){init();t0=now;return requestAnimationFrame(frame)}   // re-seed and cluster again
+  const p=reduce?1:Math.min(1,dt/SETTLE),e=1-Math.pow(1-p,3);
+  ctx.clearRect(0,0,W,H);
+  if(e>0.55){ctx.globalAlpha=(e-0.55)*0.13;                                   // halos only once settled
+   centers.forEach((c,i)=>{ctx.fillStyle=cols[i];ctx.beginPath();ctx.arc(c.x,c.y,c.s*2.1,0,6.283);ctx.fill()})}
+  for(const q of pts){const wob=reduce?0:Math.sin(now/1400+q.ph)*1.2;
+   const x=q.x0+(q.x1-q.x0)*e+wob,y=q.y0+(q.y1-q.y0)*e+wob;
+   ctx.globalAlpha=.16+.4*e;ctx.fillStyle=cols[q.k];ctx.beginPath();ctx.arc(x,y,1.8,0,6.283);ctx.fill()}
   ctx.globalAlpha=1;if(!reduce&&!$("#home").hidden)requestAnimationFrame(frame)}
- init();requestAnimationFrame(frame);new ResizeObserver(()=>{init();t0=performance.now()-2600;requestAnimationFrame(frame)}).observe(cv);
+ init();requestAnimationFrame(frame);
+ new ResizeObserver(()=>{init();t0=performance.now();requestAnimationFrame(frame)}).observe(cv);
  window.__heroRestart=()=>{requestAnimationFrame(frame)}})();
+
+/* Running view: the cells themselves, scattered at the start and settling into groups as the analysis
+   proceeds. It tracks real progress rather than looping on a timer, so it says something true about how
+   far along the run is — the clusters are only fully formed once clustering has actually happened. */
+(function runViz(){
+ const cv=$("#runCanvas");if(!cv)return;const ctx=cv.getContext("2d");
+ const cols=["#14b8a6","#f59e0b","#fb7185","#60a5fa","#a78bfa","#34d399"];
+ const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+ let W,H,pts=[],shown=0;
+ function init(){const r=cv.getBoundingClientRect();if(!r.width)return;W=r.width;H=r.height;
+  cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  const k=cols.length,cen=[];
+  for(let i=0;i<k;i++)cen.push({x:W*(0.12+0.76*((i+0.5)/k)),y:H*(0.30+0.40*Math.sin(i*1.7)),s:Math.min(W,H)*0.11});
+  pts=[];
+  for(let i=0;i<420;i++){const c=Math.floor(Math.random()*k),a=Math.random()*6.283,
+    r2=Math.sqrt(-2*Math.log(Math.random()+1e-9))*cen[c].s*0.5;
+   pts.push({x0:Math.random()*W,y0:Math.random()*H,x1:cen[c].x+Math.cos(a)*r2,y1:cen[c].y+Math.sin(a)*r2,c,ph:Math.random()*6.28})}}
+ function frame(now){
+  if(!W){init();if(!W){requestAnimationFrame(frame);return}}
+  const target=Math.min(1,(window.__runPct||0)/100);
+  shown+=(target-shown)*0.06;                       // ease toward real progress
+  const e=1-Math.pow(1-shown,2.2);
+  ctx.clearRect(0,0,W,H);
+  for(const q of pts){
+   const wob=reduce?0:Math.sin(now/900+q.ph)*(1.6*(1-e)+0.5);
+   const x=q.x0+(q.x1-q.x0)*e+wob,y=q.y0+(q.y1-q.y0)*e+wob;
+   ctx.globalAlpha=0.25+0.55*e;ctx.fillStyle=e<0.35?"#9aa8b0":cols[q.c];   // colour once groups emerge
+   ctx.beginPath();ctx.arc(x,y,2.1,0,6.283);ctx.fill()}
+  ctx.globalAlpha=1;
+  if(!$("#running").hidden)requestAnimationFrame(frame)}
+ new ResizeObserver(()=>{W=0}).observe(cv);
+ window.__runVizStart=()=>{shown=0;requestAnimationFrame(frame)};
+})();
 
 /* home interactions */
 $$(".seg button").forEach(b=>b.onclick=()=>{$$(".seg button").forEach(x=>x.classList.toggle("on",x===b));S.kind=b.dataset.kind;syncForms()});
@@ -525,10 +603,10 @@ async function renderRecent(){
   const s=x.summary||{};
   const sub=err?"could not finish":run?"still running":
     (s.cells?`${(+s.cells).toLocaleString()} cells · ${s.clusters} clusters`:
-     (s.up!=null?`${s.up} up · ${s.down} down`:new Date(x.t).toLocaleDateString()));
+     (s.up!=null?`${s.up} up · ${s.down} down`:""));
   const b=el("button","ex"+(err?" dim":""),
    `<span class="k">${x.kind==="sc"?"single-cell":x.kind==="bulk"?"bulk":"—"}</span><b>${esc(x.name)}</b>
-    <small>${esc(sub)}</small><small class="mono" style="opacity:.55">${esc(x.job)} · ${new Date(x.t).toLocaleDateString()}</small>`);
+    <small>${esc(sub)}</small><small class="mono" style="opacity:.55">${esc(x.job)} · ${esc(whenLabel(x.t))}</small>`);
   b.style.maxWidth="280px";
   b.title=err?(x.error||"This analysis ended with an error."):`Open ${x.name}`;
   b.onclick=()=>err?toast(x.error||"That analysis ended with an error."):loadResult(x.job);
@@ -537,12 +615,43 @@ async function renderRecent(){
 /* running */
 const STEPS={sc:[[3,"Read data"],[8,"QC metrics & MAD thresholds"],[18,"Doublet detection (Scrublet)"],[30,"Normalize & highly variable genes"],[40,"Scale & PCA"],[50,"Batch integration"],[55,"Neighbour graph & UMAP"],[68,"Leiden clustering"],[75,"Wilcoxon marker genes"],[82,"Figures"],[94,"Save AnnData"],[98,"PDF report"]],
  bulk:[[3,"Read counts & metadata"],[12,"DESeq2: size factors, dispersions, GLM"],[45,"Variance-stabilizing transform"],[55,"Wald tests & LFC shrinkage"],[70,"Figures"],[88,"Pathway enrichment"],[98,"PDF report"]]};
-function showRunning(kind,msg){go("running");S.runKind=kind;$("#runKind").textContent=kind==="bulk"?"bulk RNA-seq · PyDESeq2":"single-cell · Scanpy";$("#runTitle").textContent="Analyzing your data";$("#runErr").innerHTML="";updRun({pct:1,message:msg})}
-function updRun(s){const kind=S.runKind==="bulk"?"bulk":"sc";$("#runBar").style.width=Math.max(2,s.pct)+"%";$("#runPct").textContent=Math.round(s.pct)+"%";$("#runMsg").textContent=s.message;
+function showRunning(kind,msg){go("running");window.__runPct=0;if(window.__runVizStart)window.__runVizStart();S.runKind=kind;$("#runKind").textContent=kind==="bulk"?"bulk RNA-seq · PyDESeq2":"single-cell · Scanpy";$("#runTitle").textContent="Analyzing your data";$("#runErr").innerHTML="";updRun({pct:1,message:msg})}
+function sideRunning(st){
+ const c=$("#sideRunning");
+ if(!st){c.hidden=true;return}
+ c.hidden=false;
+ $("#jr_kind").textContent=(S.runKind==="bulk"?"bulk":"single-cell")+" analysis";
+ $("#jr_pct").textContent=Math.round(st.pct||0)+"%";
+ $("#jr_msg").textContent=st.message||"";
+ $("#jr_bar").style.width=Math.max(2,st.pct||0)+"%";
+}
+$("#jr_open").onclick=()=>go("running");
+
+/* runs of the same dataset differ only by when they ran, so always show that */
+const whenLabel=t=>{const d=new Date(t),now=new Date();
+ return d.toDateString()===now.toDateString()
+  ? d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})
+  : d.toLocaleDateString([], {month:"short", day:"numeric"})};
+
+/* the analyses list in the sidebar, so you can move between runs without going home first */
+async function sideRecent(){
+ let rows=[];
+ try{const r=await fetch("/api/jobs?limit=6");if(r.ok)rows=await r.json()}catch{}
+ rows=rows.filter(x=>x.state==="done").slice(0,5);
+ $("#sideRecentWrap").hidden=!rows.length;
+ $("#sideRecent").innerHTML=rows.map(x=>{
+  const s=x.summary||{};
+  const what=s.cells?`${(+s.cells).toLocaleString()} cells`:(s.up!=null?`${s.up} up · ${s.down} down`:x.kind);
+  const sub=`${what} · ${whenLabel(x.t)}`;
+  return `<a href="#job=${esc(x.job)}" data-job="${esc(x.job)}" title="${esc(x.name)}"><i>${x.kind==="sc"?"◍":"▦"}</i><span>${esc(x.name)}<small>${esc(sub)}</small></span></a>`}).join("");
+ $$("#sideRecent a").forEach(a=>a.onclick=e=>{e.preventDefault();loadResult(a.dataset.job)});
+}
+
+function updRun(s){const kind=S.runKind==="bulk"?"bulk":"sc";sideRunning(s);window.__runPct=s.pct||0;$("#runBar").style.width=Math.max(2,s.pct)+"%";$("#runPct").textContent=Math.round(s.pct)+"%";$("#runMsg").textContent=s.message;
  const st=STEPS[kind];$("#runSteps").innerHTML=st.map(([p,l],i)=>{const next=st[i+1]?st[i+1][0]:101;const cls=s.pct>=next||s.state==="done"?"done":s.pct>=p?"now":"";return`<li class="${cls}"><i></i>${l}</li>`}).join("")}
 function runError(m,trace){$("#runTitle").textContent="Analysis stopped";$("#runErr").innerHTML=`<div class="errbox">${esc(m)}</div>${trace?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted)">Technical details (copy this when reporting a problem)</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:320px;overflow:auto;background:var(--panel2);padding:10px;border-radius:8px">${esc(trace)}</pre><button class="btn" onclick="navigator.clipboard.writeText(${JSON.stringify(m+"\n"+trace)});toast('Copied')">Copy details</button></details>`:""}<div class="row" style="margin-top:12px"><button class="btn" onclick="go('home')">Back to upload</button></div>`}
 function startPoll(job,kind){S.runKind=kind;clearInterval(S.poll);history.replaceState(null,"","#job="+job);
- S.poll=setInterval(async()=>{try{const r=await fetch(`/api/jobs/${job}/status`);if(!r.ok)return;const s=await r.json();updRun(s);if(s.state==="done"){clearInterval(S.poll);loadResult(job)}else if(s.state==="error"){clearInterval(S.poll);runError(s.error||"Unknown error",s.trace)}}catch{}},900)}
+ S.poll=setInterval(async()=>{try{const r=await fetch(`/api/jobs/${job}/status`);if(!r.ok)return;const s=await r.json();updRun(s);if(s.state==="done"){clearInterval(S.poll);sideRunning(null);sideRecent();loadResult(job)}else if(s.state==="error"){clearInterval(S.poll);sideRunning(null);runError(s.error||"Unknown error",s.trace)}}catch{}},900)}
 
 /* results */
 async function loadResult(job){const r=await fetch(`/api/jobs/${job}/result`);if(!r.ok){const s=await fetch(`/api/jobs/${job}/status`);if(s.ok){const st=await s.json();if(st.state==="running"){showRunning(S.runKind||"sc",st.message);startPoll(job,S.runKind||"sc");return}}toast("That analysis is no longer available.");go("home");return}
@@ -807,7 +916,7 @@ function watchJob(job){const t=setInterval(async()=>{const s=await (await fetch(
 function refreshFigures(){}
 
 /* boot */
-syncForms();renderRecent();
+syncForms();renderRecent();sideRecent();
 $("#recentMore").onclick=()=>{RECENT_ALL=!RECENT_ALL;renderRecent()};
 const m=location.hash.match(/job=([\w]+)/);if(m)loadResult(m[1]);
 fetch("/api/settings").then(r=>r.json()).then(s=>{const v=document.getElementById("appVersion");if(v&&s.version)v.textContent="v"+s.version;}).catch(()=>{});

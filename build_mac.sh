@@ -13,8 +13,10 @@ OUT_DIR="$(cd "$OUT_DIR" && pwd)"   # absolute: the zip step runs in a subshell 
 [ -d "$APP/Contents" ] || { echo "no app bundle at $APP — copy macos/RNAseq Bench.app there first"; exit 1; }
 sed -i.bak "s|<key>CFBundleVersion</key><string>[^<]*</string>|<key>CFBundleVersion</key><string>$V</string>|; s|<key>CFBundleShortVersionString</key><string>[^<]*</string>|<key>CFBundleShortVersionString</key><string>$V</string>|" "$APP/Contents/Info.plist" && rm -f "$APP/Contents/Info.plist.bak"
 mkdir -p "$APP/Contents/Resources/app"
-rm -rf "$APP/Contents/Resources/app/server" "$APP/Contents/Resources/app/web"
-cp -R server web requirements.txt README.md VERSION CHANGELOG.md launch.sh "$APP/Contents/Resources/app/"
+rm -rf "$APP/Contents/Resources/app/server" "$APP/Contents/Resources/app/web" "$APP/Contents/Resources/app/examples"
+# examples/ holds the bulk example dataset the home screen offers; without it that button 500s in the
+# packaged app while working fine from source
+cp -R server web examples requirements.txt README.md VERSION CHANGELOG.md launch.sh "$APP/Contents/Resources/app/"
 find "$APP" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 chmod +x "$APP/Contents/MacOS/"* "$APP/Contents/Resources/app/launch.sh"
 echo "app updated: $APP (v$V)"
