@@ -15,7 +15,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sp
 
-from .common import PALETTE, Job, UserFacingError, commas, pct, style, log_exc
+from .common import PALETTE, Job, UserFacingError, commas, fmt_n, pct, style, log_exc
 from .io_utils import load_single_cell
 from .markers import CELL_TYPE_MARKERS, G2M_GENES, S_GENES
 
@@ -218,7 +218,11 @@ def run(job: Job, files: list[Path], params: dict):
     lt = adata.obs["log1p_total_counts"].values
     mtv = adata.obs["pct_counts_mt"].values
     auto_min = max(100, int(np.expm1(np.median(lg) - 5 * mad(lg))))
-    auto_max = int(np.expm1(np.median(lg) + 5 * mad(lg)))
+    # median + 5 MAD on the log scale explodes when the spread is wide (routine in single-nucleus data),
+    # and an upper cut-off above the busiest cell is not a threshold, it is a number that removes nothing
+    auto_max_raw = int(np.expm1(np.median(lg) + 5 * mad(lg)))
+    obs_max = int(adata.obs["n_genes_by_counts"].max())
+    auto_max = min(auto_max_raw, obs_max)
     auto_mt = float(np.clip(np.median(mtv) + 3 * mad(mtv), 5, 25)) if has_mt else 100.0
     min_g = int(P["min_genes"] or auto_min)
     max_g = int(P["max_genes"] or auto_max)
@@ -469,6 +473,33 @@ def run(job: Job, files: list[Path], params: dict):
         job.flag("warn", f"Clusters {', '.join(unl)} had no confident label — possibly a cell type outside the panel, residual doublets or stressed cells. Check their markers below.")
     if integrated:
         job.flag("info", f"{nb} batches (<b>{batch_key}</b>) were integrated with Harmony before clustering.")
+
+    # A cluster made almost entirely of one sample is usually that sample's technical character rather
+    # than a cell type — most often a library sequenced far less deeply than the others, which integration
+    # cannot merge because the difference is in how much was detected, not in which genes.
+    if batch_key and nb > 2:
+        share = pd.crosstab(adata.obs["leiden"], adata.obs[batch_key], normalize="index")
+        ng = adata.obs["n_genes_by_counts"]
+        depth = adata.obs.groupby("leiden", observed=True)["n_genes_by_counts"].median()
+        lonely = []
+        for cl in share.index:
+            top = share.loc[cl].max()
+            if top >= 0.8:
+                n_cl = int((adata.obs["leiden"] == cl).sum())
+                # compare with the cells outside it: a big shallow cluster drags the overall median down
+                # far enough to hide its own shallowness
+                other = float(ng[(adata.obs["leiden"] != cl).values].median())
+                lonely.append((cl, share.loc[cl].idxmax(), top, n_cl, float(depth[cl]), other))
+        for cl, who, top, n_cl, dep, other in sorted(lonely, key=lambda x: -x[3])[:3]:
+            frac = n_cl / adata.n_obs
+            deep = (f" Its cells detect a median of {dep:,.0f} genes against {other:,.0f} in the rest of the data, so it "
+                    "is likely a shallower library rather than a population." if dep < 0.6 * other else "")
+            job.flag("warn" if frac > 0.1 else "info",
+                     f"Cluster <b>{cl}</b> ({fmt_n(n_cl)} cells, {pct(n_cl, adata.n_obs)} of the data) is "
+                     f"{top*100:.0f}% from one {batch_key}, <b>{who}</b>." + deep +
+                     " A cluster that is essentially one sample usually reflects how that library was prepared or "
+                     "sequenced rather than a distinct cell type; check it before interpreting it, and consider "
+                     "leaving that sample out.")
     elif batch_key and nb > 1:
         job.flag("warn", f"{nb} batches found in <b>{batch_key}</b> but not integrated; check the UMAP coloured by batch for batch-driven clusters.")
 
@@ -707,6 +738,7 @@ def run(job: Job, files: list[Path], params: dict):
             "removed": removed, "genes_dropped": genes_dropped,
             "min_g": min_g, "max_g": max_g, "max_mt": round(max_mt, 1), "auto_min": auto_min, "auto_max": auto_max,
             "auto_mt": round(auto_mt, 1), "has_mt": has_mt, "top_cut": float(top_cut),
+            "auto_max_capped": auto_max_raw > obs_max, "obs_max_genes": obs_max,
             "n_doublets": n_doublets, "plate_based": plate_based,
             "n_hvg": n_hvg, "hvg_method": hvg_method, "n_pcs": n_pcs, "n_comps": n_comps,
             "knee": knee_pc, "knee_auto": knee_auto, "integrated": integrated,
@@ -772,9 +804,13 @@ def _panel(params, P, ctx):
           type="int", source=src(params, "min_genes", auto=True), placeholder=str(ctx["auto_min"]), min=0),
         F("max_genes", "Maximum genes per cell", ctx["max_g"], (
             "You set this." if src(params, "max_genes") == "user" else
-            f"Median + 5 MAD = {ctx['auto_max']:,} on your data.") +
-          " The upper tail is mostly doublets — two cells in one droplet detect roughly twice the genes. Raise it if a "
-          "real population in your tissue is genuinely larger or more transcriptionally active (hepatocytes, neurons).",
+            (f"Median + 5 MAD came out above your busiest cell, so there is effectively no upper cut-off and none of "
+             f"your cells were removed for detecting too many genes — normal when the spread of gene counts is wide, "
+             f"as it usually is in single-nucleus data. Shown as the observed maximum ({ctx['obs_max_genes']:,})."
+             if ctx["auto_max_capped"] else
+             f"Median + 5 MAD = {ctx['auto_max']:,} on your data.")) +
+          " The upper tail is mostly doublets — two cells in one droplet detect roughly twice the genes. Lower it if you "
+          "suspect doublets survived; raise it if a real population is genuinely larger or more transcriptionally active.",
           type="int", source=src(params, "max_genes", auto=True), placeholder=str(ctx["auto_max"]), min=0),
         F("max_mt", "Maximum mitochondrial %", ctx["max_mt"], (
             "You set this." if src(params, "max_mt") == "user" else

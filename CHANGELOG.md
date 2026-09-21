@@ -1,5 +1,17 @@
 # RNAseq Bench changelog
 
+## 3.2.2
+Found while reproducing a published figure from GEO: GSE264154.
+
+- **A cluster that is essentially one sample is now flagged.** In that dataset one donor's library was
+  sequenced about a third as deeply as the others, and Harmony cannot merge a difference in how much was
+  detected. It formed its own clusters covering 54% of the cells — half the UMAP was one library. The
+  run now says which sample, how much of the data it is, and how its depth compares with the rest.
+- **The adaptive upper gene cut-off could land above the busiest cell**, which is not a threshold but a
+  number that removes nothing (it read 260,047 on a dataset whose deepest cell had 19,057 genes). It is
+  now capped at the observed maximum, and the Parameters section says when that happened — routine in
+  single-nucleus data, where the spread of gene counts is wide.
+
 ## 3.2.1
 Everything here was found by running v3.2.0: on real GEO data, and on the packaged Mac app rather than
 from source.
