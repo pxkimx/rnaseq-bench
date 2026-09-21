@@ -1,5 +1,13 @@
 # RNAseq Bench changelog
 
+## 3.6.1
+- **The example datasets were not going through the settings confirmation.** Both of them download and
+  analyse, so they now do — 3.6 gated Run analysis and GEO's Download & analyze but left these two.
+- **A running analysis can be stopped**, from the progress screen or from the sidebar card, including
+  during a GEO download. Cancellation is cooperative: the pipeline checks between steps and stops there,
+  so it never leaves a half-written .h5ad or PDF behind. A stopped run is recorded as stopped rather
+  than as a failure, and earlier analyses are untouched.
+
 ## 3.6
 - **The analysis settings now sit below the data, and have to be acknowledged before anything runs.**
   They used to sit above the upload box where they were easy to scroll past, and both Run analysis and

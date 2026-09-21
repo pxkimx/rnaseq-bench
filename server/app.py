@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import agent, bulk_pipeline, codegen, demo, geo, sc_pipeline
-from .common import Job, run_safely
+from .common import Cancelled, Job, run_safely
 from .io_utils import guess_kind, unpack_archives
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -98,16 +98,21 @@ def geo_import(body: GeoImport):
     job = Job(d, "bulk", body.accession)
     job.set_status("running", 1, "Downloading from GEO…")
 
+    def progress(i, n, name):
+        job.check_cancelled()          # stop between files, so a large download can be abandoned
+        job.set_status("running", 1 + int(8 * i / max(n, 1)), f"Downloading {name}")
+
     def work():
         try:
-            files = geo.download_geo_files(body.urls, d / "input",
-                                          progress=lambda i, n, name: job.set_status("running", 1 + int(8 * i / max(n, 1)), f"Downloading {name}"))
+            files = geo.download_geo_files(body.urls, d / "input", progress=progress)
             files = unpack_archives(files, d / "input")
             k = guess_kind(files) if body.kind == "auto" else body.kind
             (d / "request.json").write_text(json.dumps({"kind": k, "name": body.accession.upper(), "params": body.params, "files": [str(f) for f in files]}))
             job2 = Job(d, k, body.accession.upper())
             with _lock:
                 run_safely(job2, sc_pipeline.run if k == "sc" else bulk_pipeline.run, files, body.params)
+        except Cancelled:
+            job.set_status("cancelled", 100, "Stopped", error="You stopped this download.")
         except Exception as e:  # noqa: BLE001
             job.set_status("error", 100, "Stopped", error=f"{type(e).__name__}: {e}")
 
@@ -215,7 +220,7 @@ def list_jobs(limit: int = 60):
                 if (d / "result.json").exists():
                     res = json.loads((d / "result.json").read_text())
                     row["summary"] = res.get("summary")
-                elif st.get("state") == "error":
+                elif st.get("state") in ("error", "cancelled"):
                     row["error"] = (st.get("error") or "")[:160]
                 rows.append(row)
             except Exception:  # noqa: BLE001 - a half-written job must not break the list
@@ -223,6 +228,24 @@ def list_jobs(limit: int = 60):
             if len(rows) >= limit:
                 break
     return rows
+
+
+@app.post("/api/jobs/{jid}/cancel")
+def cancel(jid: str):
+    """Ask a running analysis to stop at its next step.
+
+    A flag file rather than killing the worker: the pipeline checks it between steps, so it stops with
+    its files consistent instead of leaving a half-written h5ad or PDF behind. A download in progress
+    ends at the next step boundary too.
+    """
+    d = JOBS / jid
+    if not (d / "status.json").exists():
+        raise HTTPException(404, "Unknown job")
+    st = json.loads((d / "status.json").read_text())
+    if st.get("state") != "running":
+        return {"ok": False, "state": st.get("state")}
+    (d / "cancel").write_text("1")
+    return {"ok": True}
 
 
 @app.get("/api/jobs/{jid}/status")

@@ -60,8 +60,15 @@ class Job:
         (self.root / "status.json").write_text(json.dumps(s))
 
     def step(self, pct, msg):
+        # Every step is a chance to stop. Cancellation is cooperative rather than a killed thread:
+        # a half-written h5ad or PDF is worse than waiting for the current step to end.
+        self.check_cancelled()
         print(f"[{self.kind}] {pct:>3}% {msg}", flush=True)
         self.set_status("running", pct, msg)
+
+    def check_cancelled(self):
+        if (self.root / "cancel").exists():
+            raise Cancelled("Stopped at your request.")
 
     # ---- content ----
     def tile(self, value, label):
@@ -131,6 +138,10 @@ def _json_default(o):
     return str(o)
 
 
+class Cancelled(Exception):
+    """Raised at a step boundary when the user has asked for the run to stop."""
+
+
 def run_safely(job: Job, fn, *args, **kw):
     try:
         fn(job, *args, **kw)
@@ -139,6 +150,8 @@ def run_safely(job: Job, fn, *args, **kw):
         job.step(98, "Writing PDF report")
         build_pdf(job.root)
         job.set_status("done", 100, "Analysis complete")
+    except Cancelled:
+        job.set_status("cancelled", 100, "Stopped", error="You stopped this analysis.")
     except UserFacingError as e:
         job.set_status("error", 100, "Stopped", error=str(e))
     except Exception as e:  # pragma: no cover

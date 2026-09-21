@@ -412,7 +412,7 @@ ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-
       <div class="jr-top"><span class="dot"></span><b id="jr_kind">running</b><span class="mono" id="jr_pct">0%</span></div>
       <div class="jr-msg" id="jr_msg">Starting</div>
       <div class="jr-bar"><i id="jr_bar"></i></div>
-      <button class="btn ghost sm" id="jr_open">Watch progress</button>
+      <div class="row" style="gap:6px"><button class="btn ghost sm" id="jr_open">Watch</button><button class="btn ghost sm" id="jr_stop">Stop</button></div>
     </div>
     <div class="navwrap" id="sideRecentWrap" hidden><div class="navlabel">Recent</div><nav class="nav sr" id="sideRecent"></nav></div>
     <div class="navwrap" id="toolsWrap"><div class="navlabel">Tools</div><nav class="nav">
@@ -531,6 +531,7 @@ ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-
         <h2 style="margin-top:12px" id="runTitle">Analyzing…</h2>
         <div style="color:var(--muted);margin-top:4px" id="runMsg">Starting</div>
         <div class="bar"><i id="runBar" style="width:2%"></i></div>
+        <div class="row" style="margin-top:10px"><button class="btn sm" id="stopBtn">Stop this analysis</button></div>
         <canvas id="runCanvas" class="runcv" aria-hidden="true"></canvas>
         <ul class="steps" id="runSteps"></ul>
         <div id="runErr"></div>
@@ -717,7 +718,7 @@ $("#runBtn").onclick=async()=>{if(!settingsOK())return;const kind=S.kind==="auto
  showRunning(kind,"Uploading "+S.files.length+" file"+(S.files.length>1?"s":"")+"…");
  try{const r=await fetch("/api/analyze",{method:"POST",body:fd});if(!r.ok)throw new Error(await r.text());const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError("Upload failed: "+e.message)}};
 $("#demoSc").onclick=()=>demo("sc");$("#demoBulk").onclick=()=>demo("bulk");
-async function demo(w){showRunning(w,w==="sc"?"Fetching PBMC 3k…":"Loading GSE96870…");try{const r=await fetch("/api/demo/"+w,{method:"POST"});const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError(e.message)}}
+async function demo(w){if(!settingsOK())return;showRunning(w,w==="sc"?"Fetching PBMC 3k…":"Loading GSE96870…");try{const r=await fetch("/api/demo/"+w,{method:"POST"});const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError(e.message)}}
 $("#newBtn").onclick=$("#homeLink").onclick=e=>{e.preventDefault();go("home")};
 
 function go(view){for(const v of["home","running","results","workflow"])$("#"+v).hidden=v!==view;$("#navWrap").hidden=$("#dlWrap").hidden=view!=="results";if(view==="home"){history.replaceState(null,"","#");renderRecent();window.__heroRestart()}window.scrollTo(0,0)}
@@ -737,23 +738,23 @@ async function renderRecent(){
  $("#recentMore").textContent=RECENT_ALL?"Show fewer":`Show all ${rows.length}`;
  $("#recent").innerHTML="";
  show.forEach(x=>{
-  const err=x.state==="error", run=x.state==="running";
+  const err=x.state==="error", run=x.state==="running", stopped=x.state==="cancelled";
   const s=x.summary||{};
-  const sub=err?"could not finish":run?"still running":
+  const sub=stopped?"you stopped this one":err?"could not finish":run?"still running":
     (s.cells?`${(+s.cells).toLocaleString()} cells · ${s.clusters} clusters`:
      (s.up!=null?`${s.up} up · ${s.down} down`:""));
-  const b=el("button","ex"+(err?" dim":""),
+  const b=el("button","ex"+(err||stopped?" dim":""),
    `<span class="k">${x.kind==="sc"?"single-cell":x.kind==="bulk"?"bulk":"—"}</span><b>${esc(x.name)}</b>
     <small>${esc(sub)}</small><small class="mono" style="opacity:.55">${esc(x.job)} · ${esc(whenLabel(x.t))}</small>`);
   b.style.maxWidth="280px";
   b.title=err?(x.error||"This analysis ended with an error."):`Open ${x.name}`;
-  b.onclick=()=>err?toast(x.error||"That analysis ended with an error."):loadResult(x.job);
+  b.onclick=()=>err||stopped?toast(x.error||"That analysis did not finish."):loadResult(x.job);
   $("#recent").appendChild(b)})}
 
 /* running */
 const STEPS={sc:[[3,"Read data"],[8,"QC metrics & MAD thresholds"],[18,"Doublet detection (Scrublet)"],[30,"Normalize & highly variable genes"],[40,"Scale & PCA"],[50,"Batch integration"],[55,"Neighbour graph & UMAP"],[68,"Leiden clustering"],[75,"Wilcoxon marker genes"],[82,"Figures"],[94,"Save AnnData"],[98,"PDF report"]],
  bulk:[[3,"Read counts & metadata"],[12,"DESeq2: size factors, dispersions, GLM"],[45,"Variance-stabilizing transform"],[55,"Wald tests & LFC shrinkage"],[70,"Figures"],[88,"Pathway enrichment"],[98,"PDF report"]]};
-function showRunning(kind,msg){go("running");window.__runPct=0;if(window.__runVizStart)window.__runVizStart();S.runKind=kind;$("#runKind").textContent=kind==="bulk"?"bulk RNA-seq · PyDESeq2":"single-cell · Scanpy";$("#runTitle").textContent="Analyzing your data";$("#runErr").innerHTML="";updRun({pct:1,message:msg})}
+function showRunning(kind,msg){go("running");$("#stopBtn").hidden=false;window.__runPct=0;if(window.__runVizStart)window.__runVizStart();S.runKind=kind;$("#runKind").textContent=kind==="bulk"?"bulk RNA-seq · PyDESeq2":"single-cell · Scanpy";$("#runTitle").textContent="Analyzing your data";$("#runErr").innerHTML="";updRun({pct:1,message:msg})}
 function sideRunning(st){
  const c=$("#sideRunning");
  if(!st){c.hidden=true;return}
@@ -764,6 +765,13 @@ function sideRunning(st){
  $("#jr_bar").style.width=Math.max(2,st.pct||0)+"%";
 }
 $("#jr_open").onclick=()=>go("running");
+async function stopJob(){
+ const job=S.runJob;if(!job)return;
+ if(!confirm("Stop this analysis? Anything already written for it is kept, but the run will not finish."))return;
+ try{await fetch(`/api/jobs/${job}/cancel`,{method:"POST"});toast("Stopping at the end of the current step…")}
+ catch{toast("Could not reach the server to stop it.")}
+}
+$("#jr_stop").onclick=stopJob;$("#stopBtn").onclick=stopJob;
 
 /* runs of the same dataset differ only by when they ran, so always show that */
 const whenLabel=t=>{const d=new Date(t),now=new Date();
@@ -788,8 +796,11 @@ async function sideRecent(){
 function updRun(s){const kind=S.runKind==="bulk"?"bulk":"sc";sideRunning(s);window.__runPct=s.pct||0;$("#runBar").style.width=Math.max(2,s.pct)+"%";$("#runPct").textContent=Math.round(s.pct)+"%";$("#runMsg").textContent=s.message;
  const st=STEPS[kind];$("#runSteps").innerHTML=st.map(([p,l],i)=>{const next=st[i+1]?st[i+1][0]:101;const cls=s.pct>=next||s.state==="done"?"done":s.pct>=p?"now":"";return`<li class="${cls}"><i></i>${l}</li>`}).join("")}
 function runError(m,trace){$("#runTitle").textContent="Analysis stopped";$("#runErr").innerHTML=`<div class="errbox">${esc(m)}</div>${trace?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted)">Technical details (copy this when reporting a problem)</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:320px;overflow:auto;background:var(--panel2);padding:10px;border-radius:8px">${esc(trace)}</pre><button class="btn" onclick="navigator.clipboard.writeText(${JSON.stringify(m+"\n"+trace)});toast('Copied')">Copy details</button></details>`:""}<div class="row" style="margin-top:12px"><button class="btn" onclick="go('home')">Back to upload</button></div>`}
-function startPoll(job,kind){S.runKind=kind;clearInterval(S.poll);history.replaceState(null,"","#job="+job);
- S.poll=setInterval(async()=>{try{const r=await fetch(`/api/jobs/${job}/status`);if(!r.ok)return;const s=await r.json();updRun(s);if(s.state==="done"){clearInterval(S.poll);sideRunning(null);sideRecent();loadResult(job)}else if(s.state==="error"){clearInterval(S.poll);sideRunning(null);runError(s.error||"Unknown error",s.trace)}}catch{}},900)}
+function startPoll(job,kind){S.runKind=kind;S.runJob=job;clearInterval(S.poll);history.replaceState(null,"","#job="+job);
+ S.poll=setInterval(async()=>{try{const r=await fetch(`/api/jobs/${job}/status`);if(!r.ok)return;const s=await r.json();updRun(s);if(s.state==="done"){clearInterval(S.poll);sideRunning(null);S.runJob=null;sideRecent();loadResult(job)}else if(s.state==="cancelled"){clearInterval(S.poll);sideRunning(null);S.runJob=null;sideRecent();
+   $("#runTitle").textContent="Analysis stopped";$("#runMsg").textContent="";$("#stopBtn").hidden=true;
+   $("#runErr").innerHTML='<div class="errbox">You stopped this analysis. Nothing further was computed; any earlier analyses are untouched.</div><div class="row" style="margin-top:12px"><button class="btn" onclick="go(\'home\')">Back to upload</button></div>'}
+  else if(s.state==="error"){clearInterval(S.poll);sideRunning(null);S.runJob=null;runError(s.error||"Unknown error",s.trace)}}catch{}},900)}
 
 /* results */
 async function loadResult(job){const r=await fetch(`/api/jobs/${job}/result`);if(!r.ok){const s=await fetch(`/api/jobs/${job}/status`);if(s.ok){const st=await s.json();if(st.state==="running"){showRunning(S.runKind||"sc",st.message);startPoll(job,S.runKind||"sc");return}}toast("That analysis is no longer available.");go("home");return}
