@@ -249,6 +249,59 @@ def _adata(jid: str):
     return sc.read_h5ad(JOBS / jid / "analyzed.h5ad")
 
 
+class Selection(BaseModel):
+    points: list[int]          # positions in the embedding arrays, i.e. what the user drew a loop around
+
+
+@app.post("/api/jobs/{jid}/select_de")
+def select_de(jid: str, body: Selection):
+    """Rank the genes that separate a hand-drawn selection of cells from the rest.
+
+    This is a ranking, not a test. The cells were selected by eye from a map built out of the same
+    expression values, so any p-value here is optimistic by construction (the usual double-dipping
+    problem), and cells from one sample are not independent replicates of each other. It is for finding
+    what a population you can see is made of; a claim about a condition still needs the pseudobulk test.
+    """
+    import pandas as pd
+    import scanpy as sc
+
+    a = _adata(jid)
+    emb = json.loads((JOBS / jid / "embedding.json").read_text())
+    idx = np.asarray(emb["index"], dtype=int)
+    pts = np.asarray(sorted(set(int(i) for i in body.points if 0 <= int(i) < len(idx))), dtype=int)
+    if len(pts) < 20:
+        raise HTTPException(400, "Select at least 20 cells — a smaller group gives nothing reliable.")
+    mask = np.zeros(a.n_obs, dtype=bool)
+    mask[idx[pts]] = True
+    if int((~mask).sum()) < 20:
+        raise HTTPException(400, "Almost every cell is selected, so there is nothing left to compare with.")
+
+    lab = "cell_type_simple" if "cell_type_simple" in a.obs else "leiden"
+    comp = (pd.Series(a.obs[lab].astype(str).values[mask]).value_counts().head(8) / int(mask.sum()) * 100)
+    composition = [[k, round(float(v), 1)] for k, v in comp.items()]
+
+    a.obs["_sel"] = pd.Categorical(np.where(mask, "selected", "rest"), categories=["rest", "selected"])
+    sc.tl.rank_genes_groups(a, "_sel", groups=["selected"], reference="rest", method="wilcoxon")
+    r = sc.get.rank_genes_groups_df(a, group="selected").dropna(subset=["logfoldchanges"])
+
+    X = a[:, r["names"].tolist()].X
+    dense = X.toarray() if hasattr(X, "toarray") else np.asarray(X)
+    pct_in = (dense[mask] > 0).mean(0) * 100
+    pct_out = (dense[~mask] > 0).mean(0) * 100
+    r = r.assign(pct_in=pct_in, pct_out=pct_out)
+
+    def rows(d):
+        return [{"gene": x["names"], "lfc": round(float(x["logfoldchanges"]), 2),
+                 "padj": float(x["pvals_adj"]), "pct_in": round(float(x["pct_in"]), 1),
+                 "pct_out": round(float(x["pct_out"]), 1)} for _, x in d.iterrows()]
+
+    up = r[r.logfoldchanges > 0].nlargest(25, "scores")
+    down = r[r.logfoldchanges < 0].nsmallest(25, "scores")
+    return {"n_selected": int(mask.sum()), "n_rest": int((~mask).sum()),
+            "label_key": lab, "composition": composition,
+            "up": rows(up), "down": rows(down)}
+
+
 @app.get("/api/jobs/{jid}/gene/{gene}")
 def gene(jid: str, gene: str):
     a = _adata(jid)

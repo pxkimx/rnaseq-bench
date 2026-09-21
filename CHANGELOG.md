@@ -1,5 +1,18 @@
 # RNAseq Bench changelog
 
+## 3.3
+- **Draw a loop around cells on the UMAP and ask what they are.** "Select cells" in the explorer turns
+  the cursor into a lasso; enclose any group — a cluster, part of one, a bridge between two — and the
+  app reports what the selection is made of and ranks the genes that separate it from every other cell,
+  with the percentage expressing inside and outside. This is the interactive exploration commercial
+  viewers are bought for. It says plainly that it is a ranking and not a test: the cells were picked by
+  eye from a map built out of the same expression values, so the p-values behind it are optimistic by
+  construction, and a claim about a condition still needs the sample-level comparison.
+- **The home page animation looks like single-cell data.** One dominant population with a long tail of
+  smaller ones, clusters that are elongated and tilted rather than round, thin arms bridging neighbours,
+  and a scatter of stray cells — instead of evenly spaced circular blobs. It is also confined to the left
+  half of the hero, since the upload panel covers the right and everything drawn under it was invisible.
+
 ## 3.2.9
 - **Every figure can now be downloaded as vector PDF**, next to the PNG. Journals want vector for
   anything containing text, and a 200 dpi raster is what gets a figure sent back at proof stage. The

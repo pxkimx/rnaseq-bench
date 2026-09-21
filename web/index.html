@@ -201,7 +201,7 @@ td.gene{font-family:var(--mono);font-weight:500}
 .versions{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
 
 /* explorer */
-.explorer{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:0;border-top:1px solid var(--line2)}
+.explorer{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:0;border-top:1px solid var(--line2)}
 @media (max-width:800px){.explorer{grid-template-columns:1fr}}
 .explorer .plot{position:relative;min-height:460px;background:var(--panel2)}
 .explorer canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
@@ -320,6 +320,16 @@ body.chat-open .fab{display:none}
 .tag.fixed{color:var(--info);border-color:color-mix(in srgb,var(--info) 30%,transparent);background:var(--info-soft)}
 .lightbox{position:fixed;inset:0;z-index:70;display:grid;place-items:center;background:rgba(5,12,16,.8);padding:24px;cursor:zoom-out}
 .lightbox img{max-width:100%;max-height:100%;background:#fff;border-radius:12px;padding:12px}
+.zoomctl .btn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.selbox{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.selbox .selhead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.selbox .btn.full{width:100%}
+.selbox .seltab{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.selbox table{width:100%;border-collapse:collapse;font-size:12px}
+.selbox th{position:sticky;top:0;background:var(--panel);text-align:left;font-weight:600;padding:5px 7px;border-bottom:1px solid var(--line);font-size:11px;color:var(--muted)}
+.selbox td{padding:3px 7px;border-bottom:1px solid var(--line2)}
+.selbox td:first-child{font-weight:600}
+.selbox .selcav{font-size:11.5px;line-height:1.45;margin:0}
 .card .act .vec{font:600 10.5px var(--mono);letter-spacing:.04em;padding:0 8px;height:28px}
 .runcv{width:100%;height:150px;display:block;margin:14px 0 2px;border-radius:12px;background:var(--panel2);border:1px solid var(--line2)}
 /* sidebar: live job card, quick-switch list, byline */
@@ -499,30 +509,62 @@ function toast(m){const t=el("div","toast",esc(m));document.body.appendChild(t);
 $("#themeBtn").onclick=()=>{const cur=document.documentElement.dataset.theme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");const n=cur==="dark"?"light":"dark";document.documentElement.dataset.theme=n;store.set("theme",n);window.dispatchEvent(new Event("themechange"))};
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-/* Hero canvas: cells condensing into clusters, then re-seeding and doing it again — the one thing the
-   app does, running quietly behind the title. Halos fade in only once the groups have formed. */
+/* A cloud of cells shaped like real single-cell data rather than a scatter of round blobs: one dominant
+   population, a long tail of smaller ones, clusters that are elongated and tilted rather than circular,
+   a couple of thin arms bridging neighbours the way a differentiating population does, and a scatter of
+   stray cells. Shared by the hero and the progress view. */
+function makeCells(n, x0, x1, y0, y1, k, rnd){
+ const R=rnd||Math.random, W=x1-x0, H=y1-y0;
+ const gauss=()=>Math.sqrt(-2*Math.log(R()+1e-9))*Math.cos(6.283*R());
+ // sizes follow a steep tail: one population dominates, several are mid-sized, a few are rare
+ const w=[];let tot=0;
+ for(let i=0;i<k;i++){const v=1/Math.pow(i+1,1.45);w.push(v);tot+=v}
+ const cen=[];
+ for(let i=0;i<k;i++){
+  const ang=6.283*(i/k)+R()*0.8, rad=(0.16+0.30*R());
+  cen.push({x:x0+W*(0.5+Math.cos(ang)*rad), y:y0+H*(0.5+Math.sin(ang)*rad*0.92),
+            sx:Math.min(W,H)*(0.030+0.075*Math.pow(w[i]/w[0],0.5)),
+            sy:Math.min(W,H)*(0.022+0.055*Math.pow(w[i]/w[0],0.5))*(0.45+0.9*R()),  // anisotropy
+            th:R()*3.1416})}                                                         // and a tilt
+ const pts=[];
+ for(let i=0;i<k;i++){
+  const c=cen[i], m=Math.max(6,Math.round(n*0.93*w[i]/tot));
+  for(let j=0;j<m;j++){
+   let a=gauss()*c.sx, b=gauss()*c.sy;
+   const ct=Math.cos(c.th), st=Math.sin(c.th);
+   pts.push({x1:c.x+a*ct-b*st, y1:c.y+a*st+b*ct, k:i})}}
+ // two thin arms: a sparse trail curving from one population toward another
+ for(let a=0;a<2&&k>2;a++){
+  const i=a, j=(a+1+Math.floor(R()*(k-1)))%k, A=cen[i], B=cen[j];
+  const mx=(A.x+B.x)/2+(R()-0.5)*W*0.22, my=(A.y+B.y)/2+(R()-0.5)*H*0.22;
+  for(let t=0,m=Math.round(n*0.02);t<m;t++){
+   const u=R(), q=(1-u)*(1-u), r2=2*(1-u)*u, s2=u*u;
+   pts.push({x1:q*A.x+r2*mx+s2*B.x+gauss()*Math.min(W,H)*0.012,
+             y1:q*A.y+r2*my+s2*B.y+gauss()*Math.min(W,H)*0.012, k:u<0.5?i:j})}}
+ for(let i=0,m=Math.round(n*0.02);i<m;i++)               // stray cells
+  pts.push({x1:x0+W*R(), y1:y0+H*R(), k:Math.floor(R()*k)});
+ for(const q of pts){q.x0=x0+W*R();q.y0=y0+H*R();q.ph=R()*6.28}
+ return pts;
+}
+
+/* Hero canvas: cells condensing into clusters, then re-seeding and doing it again. Kept to the left of
+   the hero — the upload panel covers the right half, and anything drawn under it is invisible. */
 (function hero(){const cv=$("#heroCanvas"),ctx=cv.getContext("2d");
  const cols=["#14b8a6","#f59e0b","#fb7185","#60a5fa","#a78bfa","#34d399","#f472b6"];
- let W,H,pts=[],centers=[],t0=performance.now();
- const SETTLE=2600,HOLD=4200,CYCLE=SETTLE+HOLD;
+ let W,H,pts=[],t0=performance.now();
+ const SETTLE=2800,HOLD=4600,CYCLE=SETTLE+HOLD;
  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
  function init(){const r=cv.getBoundingClientRect();W=r.width;H=r.height;
   cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
-  centers=cols.map(()=>({x:W*(0.3+0.68*Math.random()),y:H*(0.08+0.84*Math.random()),s:10+Math.random()*26}));
-  pts=[];
-  for(let i=0;i<700;i++){const k=Math.floor(Math.pow(Math.random(),1.4)*cols.length),c=centers[k],
-    a=Math.random()*6.283,r2=Math.sqrt(-2*Math.log(Math.random()+1e-9))*c.s;
-   pts.push({x0:Math.random()*W,y0:Math.random()*H,x1:c.x+Math.cos(a)*r2,y1:c.y+Math.sin(a)*r2*.8,k,ph:Math.random()*6.28})}}
+  pts=makeCells(900, W*0.02, W*0.50, H*0.06, H*0.94, cols.length);}
  function frame(now){
   const dt=now-t0;
-  if(!reduce&&dt>CYCLE){init();t0=now;return requestAnimationFrame(frame)}   // re-seed and cluster again
+  if(!reduce&&dt>CYCLE){init();t0=now;return requestAnimationFrame(frame)}
   const p=reduce?1:Math.min(1,dt/SETTLE),e=1-Math.pow(1-p,3);
   ctx.clearRect(0,0,W,H);
-  if(e>0.55){ctx.globalAlpha=(e-0.55)*0.13;                                   // halos only once settled
-   centers.forEach((c,i)=>{ctx.fillStyle=cols[i];ctx.beginPath();ctx.arc(c.x,c.y,c.s*2.1,0,6.283);ctx.fill()})}
-  for(const q of pts){const wob=reduce?0:Math.sin(now/1400+q.ph)*1.2;
+  for(const q of pts){const wob=reduce?0:Math.sin(now/1500+q.ph)*1.1*(1-0.6*e);
    const x=q.x0+(q.x1-q.x0)*e+wob,y=q.y0+(q.y1-q.y0)*e+wob;
-   ctx.globalAlpha=.16+.4*e;ctx.fillStyle=cols[q.k];ctx.beginPath();ctx.arc(x,y,1.8,0,6.283);ctx.fill()}
+   ctx.globalAlpha=.10+.30*e;ctx.fillStyle=cols[q.k];ctx.beginPath();ctx.arc(x,y,1.6,0,6.283);ctx.fill()}
   ctx.globalAlpha=1;if(!reduce&&!$("#home").hidden)requestAnimationFrame(frame)}
  init();requestAnimationFrame(frame);
  new ResizeObserver(()=>{init();t0=performance.now();requestAnimationFrame(frame)}).observe(cv);
@@ -538,12 +580,7 @@ const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim
  let W,H,pts=[],shown=0;
  function init(){const r=cv.getBoundingClientRect();if(!r.width)return;W=r.width;H=r.height;
   cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
-  const k=cols.length,cen=[];
-  for(let i=0;i<k;i++)cen.push({x:W*(0.12+0.76*((i+0.5)/k)),y:H*(0.30+0.40*Math.sin(i*1.7)),s:Math.min(W,H)*0.11});
-  pts=[];
-  for(let i=0;i<420;i++){const c=Math.floor(Math.random()*k),a=Math.random()*6.283,
-    r2=Math.sqrt(-2*Math.log(Math.random()+1e-9))*cen[c].s*0.5;
-   pts.push({x0:Math.random()*W,y0:Math.random()*H,x1:cen[c].x+Math.cos(a)*r2,y1:cen[c].y+Math.sin(a)*r2,c,ph:Math.random()*6.28})}}
+  pts=makeCells(620, W*0.04, W*0.96, H*0.08, H*0.92, cols.length);}
  function frame(now){
   if(!W){init();if(!W){requestAnimationFrame(frame);return}}
   const target=Math.min(1,(window.__runPct||0)/100);
@@ -553,7 +590,7 @@ const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim
   for(const q of pts){
    const wob=reduce?0:Math.sin(now/900+q.ph)*(1.6*(1-e)+0.5);
    const x=q.x0+(q.x1-q.x0)*e+wob,y=q.y0+(q.y1-q.y0)*e+wob;
-   ctx.globalAlpha=0.25+0.55*e;ctx.fillStyle=e<0.35?"#9aa8b0":cols[q.c];   // colour once groups emerge
+   ctx.globalAlpha=0.25+0.55*e;ctx.fillStyle=e<0.35?"#9aa8b0":cols[q.k];   // colour once groups emerge
    ctx.beginPath();ctx.arc(x,y,2.1,0,6.283);ctx.fill()}
   ctx.globalAlpha=1;
   if(!$("#running").hidden)requestAnimationFrame(frame)}
@@ -698,10 +735,10 @@ const VIR=["#440154","#482878","#3e4a89","#31688e","#26828e","#1f9e89","#35b779"
 const vir=t=>VIR[Math.max(0,Math.min(9,Math.floor(t*9.999)))];
 function explorerCard(it,job){const c=el("article","card wide");
  c.innerHTML=`<div class="hd"><div><h3>${esc(it.title)}</h3><div class="sub">hover a cell · click legend entries to hide clusters · scroll to zoom, drag to pan</div></div></div>
- <div class="explorer"><div class="plot"><canvas></canvas><div class="zoomctl"><button class="btn sm" data-z="reset">Reset view</button></div></div><div class="panel">
+ <div class="explorer"><div class="plot"><canvas></canvas><div class="zoomctl"><button class="btn sm" data-z="lasso" title="Draw a loop around cells to see what they are made of">Select cells</button><button class="btn sm" data-z="reset">Reset view</button></div></div><div class="panel">
   <label>Colour by<select class="colorBy"></select></label>
   <label class="geneWrap">Gene<input class="geneQ" list="geneList_${job}" placeholder="e.g. CD3E, MS4A1"><datalist id="geneList_${job}"></datalist></label>
-  <div class="hint status">Loading embedding…</div><div class="legend"></div></div></div>`;
+  <div class="hint status">Loading embedding…</div><div class="legend"></div><div class="selbox" hidden></div></div></div>`;
  const cv=c.querySelector("canvas"),ctx=cv.getContext("2d"),sel=c.querySelector(".colorBy"),gq=c.querySelector(".geneQ"),leg=c.querySelector(".legend"),status=c.querySelector(".status");
  let E=null,mode="cluster",vals=null,cats=null,hidden=new Set(),view={s:1,x:0,y:0},W=0,H=0,bounds=null,pts=null;
  fetch(F(job,it.data)).then(r=>r.json()).then(d=>{E=d;
@@ -734,11 +771,60 @@ function explorerCard(it,job){const c=el("article","card wide");
    for(let k=0;k<K;k++){if(!cn[k]||hidden.has(k))continue;const t=E.clusters[k].length>22?E.clusters[k].split(":")[0]:E.clusters[k];const w=ctx.measureText(t).width+10;ctx.fillStyle=css("--panel");ctx.globalAlpha=.85;ctx.beginPath();ctx.roundRect(sx[k]/cn[k]-w/2,sy[k]/cn[k]-10,w,20,6);ctx.fill();ctx.globalAlpha=1;ctx.fillStyle=css("--ink");ctx.fillText(t,sx[k]/cn[k],sy[k]/cn[k])}}}
  new ResizeObserver(resize).observe(cv);window.addEventListener("themechange",draw);matchMedia("(prefers-color-scheme: dark)").addEventListener("change",draw);
  cv.addEventListener("wheel",e=>{e.preventDefault();const r=cv.getBoundingClientRect(),mx=e.clientX-r.left-W/2,my=e.clientY-r.top-H/2,f=e.deltaY<0?1.15:1/1.15;view.x=mx-(mx-view.x)*f;view.y=my-(my-view.y)*f;view.s*=f;draw()},{passive:false});
- let drag=null;cv.addEventListener("pointerdown",e=>{drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};cv.setPointerCapture(e.pointerId)});cv.addEventListener("pointerup",()=>drag=null);
- cv.addEventListener("pointermove",e=>{if(drag){view.x=drag.vx+e.clientX-drag.x;view.y=drag.vy+e.clientY-drag.y;draw();return}if(!pts)return;const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let b=-1,bd=64;for(let i=0;i<E.x.length;i++){const d=(pts[2*i]-x)**2+(pts[2*i+1]-y)**2;if(d<bd){bd=d;b=i}}
+ /* Lasso: draw a loop, find the cells inside it, and ask the server what distinguishes them. */
+ let lasso=false,path=null,picked=null;const selbox=c.querySelector(".selbox"),lassoBtn=c.querySelector("[data-z=lasso]");
+ function drawLasso(){if(!path||path.length<2)return;ctx.save();ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  ctx.beginPath();ctx.moveTo(path[0][0],path[0][1]);for(const[x,y]of path.slice(1))ctx.lineTo(x,y);ctx.closePath();
+  ctx.fillStyle=css("--accent")+"22";ctx.fill();ctx.strokeStyle=css("--accent");ctx.lineWidth=1.6;ctx.setLineDash([5,4]);ctx.stroke();ctx.restore()}
+ const inPoly=(x,y,P)=>{let c2=false;for(let i=0,j=P.length-1;i<P.length;j=i++){
+  if((P[i][1]>y)!==(P[j][1]>y)&&x<(P[j][0]-P[i][0])*(y-P[i][1])/(P[j][1]-P[i][1])+P[i][0])c2=!c2}return c2};
+ function finishLasso(){
+  if(!path||path.length<3||!pts){path=null;draw();return}
+  picked=[];for(let i=0;i<E.x.length;i++){if(cats&&hidden.has(cats.codes[i]))continue;
+   if(inPoly(pts[2*i],pts[2*i+1],path))picked.push(i)}
+  draw();drawLasso();
+  if(picked.length<20){selbox.hidden=false;selbox.innerHTML=`<p class="hint">Only ${picked.length} cells in that loop — select at least 20.</p>`;return}
+  selbox.hidden=false;
+  selbox.innerHTML=`<div class="selhead"><b>${picked.length.toLocaleString()} cells selected</b>
+    <button class="btn ghost sm" data-clear>Clear</button></div>
+   <button class="btn accent sm full" data-go>What are these cells?</button>`;
+  selbox.querySelector("[data-clear]").onclick=()=>{picked=null;path=null;selbox.hidden=true;draw()};
+  selbox.querySelector("[data-go]").onclick=runSelDE;
+  selbox.scrollIntoView({block:"nearest",behavior:"smooth"})}
+ async function runSelDE(){
+  selbox.innerHTML=`<p class="hint">Ranking genes across ${picked.length.toLocaleString()} cells…</p>`;
+  try{
+   const r=await fetch(`/api/jobs/${job}/select_de`,{method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({points:picked})});
+   if(!r.ok)throw new Error(((await r.json()).detail)||r.statusText);
+   const d=await r.json();
+   const row=g=>`<tr><td>${esc(g.gene)}</td><td class="mono">${g.lfc>0?"+":""}${g.lfc}</td><td class="mono">${g.pct_in}% / ${g.pct_out}%</td></tr>`;
+   selbox.innerHTML=`<div class="selhead"><b>${d.n_selected.toLocaleString()} cells</b><button class="btn ghost sm" data-clear>Clear</button></div>
+    <p class="hint">Made of: ${d.composition.map(([k,v])=>`${esc(k)} ${v}%`).join(" · ")}</p>
+    <div class="seltab"><table><thead><tr><th>Higher here</th><th>log2FC</th><th>% in / out</th></tr></thead>
+     <tbody>${d.up.slice(0,12).map(row).join("")}</tbody></table></div>
+    <div class="seltab"><table><thead><tr><th>Lower here</th><th>log2FC</th><th>% in / out</th></tr></thead>
+     <tbody>${d.down.slice(0,8).map(row).join("")}</tbody></table></div>
+    <p class="hint selcav">These cells were picked by eye from a map built out of the same expression values,
+     so treat this as a ranking of what marks them, not as a test — the p-values behind it are optimistic by
+     construction. For a claim about a condition, use the sample-level comparison.</p>`;
+   selbox.querySelector("[data-clear]").onclick=()=>{picked=null;path=null;selbox.hidden=true;draw()};
+   selbox.scrollIntoView({block:"nearest",behavior:"smooth"});
+  }catch(e){selbox.innerHTML=`<p class="hint">Could not rank those cells: ${esc(e.message)}</p>`}}
+ lassoBtn.onclick=()=>{lasso=!lasso;lassoBtn.classList.toggle("on",lasso);
+  cv.style.cursor=lasso?"crosshair":"";if(!lasso){path=null;draw()}};
+
+ let drag=null;cv.addEventListener("pointerdown",e=>{
+  const r=cv.getBoundingClientRect();
+  if(lasso){path=[[e.clientX-r.left,e.clientY-r.top]];cv.setPointerCapture(e.pointerId);return}
+  drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};cv.setPointerCapture(e.pointerId)});
+ cv.addEventListener("pointerup",()=>{if(lasso&&path){finishLasso()}drag=null});
+ cv.addEventListener("pointermove",e=>{
+  if(lasso&&path){const r=cv.getBoundingClientRect();path.push([e.clientX-r.left,e.clientY-r.top]);draw();drawLasso();return}
+  if(drag){view.x=drag.vx+e.clientX-drag.x;view.y=drag.vy+e.clientY-drag.y;draw();return}if(!pts)return;const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;let b=-1,bd=64;for(let i=0;i<E.x.length;i++){const d=(pts[2*i]-x)**2+(pts[2*i+1]-y)**2;if(d<bd){bd=d;b=i}}
   const tip=$("#tip");if(b<0){tip.hidden=true;return}let t=E.clusters[E.cluster[b]];if(mode!=="cluster"&&cats)t+=" · "+cats.levels[cats.codes[b]];if(!cats&&vals)t+=" · "+(+vals[b]).toFixed(2);t+=` · ${E.numeric.n_genes_by_counts[b]|0} genes`;tip.textContent=t;tip.hidden=false;tip.style.left=Math.min(e.clientX+12,innerWidth-tip.offsetWidth-8)+"px";tip.style.top=e.clientY+14+"px"});
  cv.addEventListener("pointerleave",()=>$("#tip").hidden=true);
- c.querySelector("[data-z=reset]").onclick=()=>{view={s:1,x:0,y:0};draw()};return c}
+ c.querySelector("[data-z=reset]").onclick=()=>{view={s:1,x:0,y:0};path=null;draw()};return c}
 
 /* parameters panel — every choice, the reason for it, and one Re-analyze button */
 const TAGTXT={auto:"auto",user:"you set",default:"default",data:"from data",fixed:"fixed"};
