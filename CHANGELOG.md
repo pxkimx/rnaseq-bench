@@ -1,5 +1,10 @@
 # RNAseq Bench changelog
 
+## 3.3.3
+- The sidebar masthead now reads **RNAseq Bench — created by Paul H. Kim, Ph.D.**, with a larger mark and
+  wordmark. It stacks rather than sitting in a row, since a wordmark this size will not fit beside the
+  mark in a sidebar, which widened slightly to suit. The duplicate line in the footer is gone.
+
 ## 3.3.2
 - Cleaner animation: cluster tails are truncated so populations stay compact instead of spraying stray
   cells, and the scattered points are cut from 2% to 0.4% and placed around the structure rather than
