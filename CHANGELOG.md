@@ -1,5 +1,14 @@
 # RNAseq Bench changelog
 
+## 3.3.1
+- The home animation now draws **7,000 cells in 14 populations** — the density of a real embedding rather
+  than a sketch of one — in a brighter palette, batched one fill per population so it holds 60fps. The
+  progress view gets the same treatment at 3,200 cells.
+- Cells now start as a diffuse version of the final structure instead of uniform random positions, so the
+  opening frames look like unintegrated data rather than static.
+- The hero copy carries a halo in the panel colour so it stays readable over the cloud, with the
+  gradient headline excluded — a shadow behind clipped-gradient text paints straight over it.
+
 ## 3.3
 - **Draw a loop around cells on the UMAP and ask what they are.** "Select cells" in the explorer turns
   the cursor into a lasso; enclose any group — a cluster, part of one, a bridge between two — and the

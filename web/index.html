@@ -320,6 +320,12 @@ body.chat-open .fab{display:none}
 .tag.fixed{color:var(--info);border-color:color-mix(in srgb,var(--info) 30%,transparent);background:var(--info-soft)}
 .lightbox{position:fixed;inset:0;z-index:70;display:grid;place-items:center;background:rgba(5,12,16,.8);padding:24px;cursor:zoom-out}
 .lightbox img{max-width:100%;max-height:100%;background:#fff;border-radius:12px;padding:12px}
+/* The cell cloud runs behind the hero copy. A halo in the panel colour keeps the text readable without
+   covering the animation, which a solid scrim would. */
+.hero h1,.hero .lede,.hero .byline{text-shadow:0 0 14px var(--panel),0 0 6px var(--panel),0 1px 2px var(--panel)}
+.hero h1 em{text-shadow:none}   /* clipped-gradient text: a shadow would paint straight over it */
+.hero .chip{background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.hero .eyebrow{backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .zoomctl .btn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .selbox{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
 .selbox .selhead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
@@ -543,28 +549,41 @@ function makeCells(n, x0, x1, y0, y1, k, rnd){
              y1:q*A.y+r2*my+s2*B.y+gauss()*Math.min(W,H)*0.012, k:u<0.5?i:j})}}
  for(let i=0,m=Math.round(n*0.02);i<m;i++)               // stray cells
   pts.push({x1:x0+W*R(), y1:y0+H*R(), k:Math.floor(R()*k)});
- for(const q of pts){q.x0=x0+W*R();q.y0=y0+H*R();q.ph=R()*6.28}
+ const mx=x0+W/2, my=y0+H/2;
+ for(const q of pts){
+  const spread=0.55+0.5*R();
+  q.x0=mx+(q.x1-mx)*spread+gauss()*W*0.13;
+  q.y0=my+(q.y1-my)*spread+gauss()*H*0.13;
+  q.ph=R()*6.28}
  return pts;
 }
 
 /* Hero canvas: cells condensing into clusters, then re-seeding and doing it again. Kept to the left of
    the hero — the upload panel covers the right half, and anything drawn under it is invisible. */
 (function hero(){const cv=$("#heroCanvas"),ctx=cv.getContext("2d");
- const cols=["#14b8a6","#f59e0b","#fb7185","#60a5fa","#a78bfa","#34d399","#f472b6"];
- let W,H,pts=[],t0=performance.now();
+ const cols=["#00e0cf","#ffb020","#ff5c8a","#4ea3ff","#b27bff","#2ee6a8","#ff7ae0",
+             "#ffd23f","#38bdf8","#a3e635","#fb923c","#c084fc","#22d3ee","#f43f5e"];
+ let W,H,pts=[],byCol=[],t0=performance.now();
  const SETTLE=2800,HOLD=4600,CYCLE=SETTLE+HOLD;
  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
  function init(){const r=cv.getBoundingClientRect();W=r.width;H=r.height;
   cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
-  pts=makeCells(900, W*0.02, W*0.50, H*0.06, H*0.94, cols.length);}
+  // as many cells as a real embedding shows; drawn as 1px squares in batches, one fillStyle per
+  // population, which is what keeps several thousand points at 60fps
+  pts=makeCells(7000, W*0.015, W*0.51, H*0.04, H*0.96, cols.length);
+  byCol=cols.map(()=>[]);for(const q of pts)byCol[q.k].push(q);}
  function frame(now){
   const dt=now-t0;
   if(!reduce&&dt>CYCLE){init();t0=now;return requestAnimationFrame(frame)}
   const p=reduce?1:Math.min(1,dt/SETTLE),e=1-Math.pow(1-p,3);
   ctx.clearRect(0,0,W,H);
-  for(const q of pts){const wob=reduce?0:Math.sin(now/1500+q.ph)*1.1*(1-0.6*e);
-   const x=q.x0+(q.x1-q.x0)*e+wob,y=q.y0+(q.y1-q.y0)*e+wob;
-   ctx.globalAlpha=.10+.30*e;ctx.fillStyle=cols[q.k];ctx.beginPath();ctx.arc(x,y,1.6,0,6.283);ctx.fill()}
+  ctx.globalAlpha=.30+.55*e;                       // brighter once the populations resolve
+  const sz=1.7,t=now/1500;
+  for(let k=0;k<byCol.length;k++){
+   ctx.fillStyle=cols[k];
+   for(const q of byCol[k]){
+    const wob=reduce?0:Math.sin(t+q.ph)*1.1*(1-0.6*e);
+    ctx.fillRect(q.x0+(q.x1-q.x0)*e+wob, q.y0+(q.y1-q.y0)*e+wob, sz, sz)}}
   ctx.globalAlpha=1;if(!reduce&&!$("#home").hidden)requestAnimationFrame(frame)}
  init();requestAnimationFrame(frame);
  new ResizeObserver(()=>{init();t0=performance.now();requestAnimationFrame(frame)}).observe(cv);
@@ -575,23 +594,26 @@ function makeCells(n, x0, x1, y0, y1, k, rnd){
    far along the run is — the clusters are only fully formed once clustering has actually happened. */
 (function runViz(){
  const cv=$("#runCanvas");if(!cv)return;const ctx=cv.getContext("2d");
- const cols=["#14b8a6","#f59e0b","#fb7185","#60a5fa","#a78bfa","#34d399"];
+ const cols=["#00e0cf","#ffb020","#ff5c8a","#4ea3ff","#b27bff","#2ee6a8","#ffd23f","#a3e635","#38bdf8"];
  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
- let W,H,pts=[],shown=0;
+ let W,H,pts=[],byCol=[],shown=0;
  function init(){const r=cv.getBoundingClientRect();if(!r.width)return;W=r.width;H=r.height;
   cv.width=W*devicePixelRatio;cv.height=H*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
-  pts=makeCells(620, W*0.04, W*0.96, H*0.08, H*0.92, cols.length);}
+  pts=makeCells(3200, W*0.03, W*0.97, H*0.06, H*0.94, cols.length);
+  byCol=cols.map(()=>[]);for(const q of pts)byCol[q.k].push(q);}
  function frame(now){
   if(!W){init();if(!W){requestAnimationFrame(frame);return}}
   const target=Math.min(1,(window.__runPct||0)/100);
   shown+=(target-shown)*0.06;                       // ease toward real progress
   const e=1-Math.pow(1-shown,2.2);
   ctx.clearRect(0,0,W,H);
-  for(const q of pts){
-   const wob=reduce?0:Math.sin(now/900+q.ph)*(1.6*(1-e)+0.5);
-   const x=q.x0+(q.x1-q.x0)*e+wob,y=q.y0+(q.y1-q.y0)*e+wob;
-   ctx.globalAlpha=0.25+0.55*e;ctx.fillStyle=e<0.35?"#9aa8b0":cols[q.k];   // colour once groups emerge
-   ctx.beginPath();ctx.arc(x,y,2.1,0,6.283);ctx.fill()}
+  ctx.globalAlpha=0.35+0.6*e;
+  const t=now/900,sz=1.9,grey=e<0.35;
+  for(let k=0;k<byCol.length;k++){
+   ctx.fillStyle=grey?"#9aa8b0":cols[k];           // colour only once the groups emerge
+   for(const q of byCol[k]){
+    const wob=reduce?0:Math.sin(t+q.ph)*(1.6*(1-e)+0.5);
+    ctx.fillRect(q.x0+(q.x1-q.x0)*e+wob, q.y0+(q.y1-q.y0)*e+wob, sz, sz)}}
   ctx.globalAlpha=1;
   if(!$("#running").hidden)requestAnimationFrame(frame)}
  new ResizeObserver(()=>{W=0}).observe(cv);
