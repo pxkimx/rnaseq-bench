@@ -329,7 +329,7 @@ body.chat-open .fab{display:none}
 .hero .eyebrow{backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 /* How it works */
 #workflow .flowlede{max-width:70ch;margin:14px 0 4px}
-#workflow .seg{margin-left:auto}
+#workflow .flowseg{margin:18px 0 2px}
 ol.flow{list-style:none;padding:0;margin:18px 0 0;display:flex;flex-direction:column;gap:12px}
 ol.flow li{display:grid;grid-template-columns:34px 190px minmax(0,1fr);gap:16px;align-items:start;
  border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:16px 18px}
@@ -366,6 +366,12 @@ ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-
 .jobcard .jr-bar i{display:block;height:100%;width:2%;background:var(--accent);border-radius:99px;transition:width .5s ease}
 .nav.sr a{font-size:12.5px;padding:6px 8px;gap:8px}
 .nav.sr a small{display:block;font:10.5px var(--mono);color:var(--muted)}
+.nav a .caret{margin-left:auto;font-weight:400;color:var(--muted);transition:transform .18s;display:inline-block}
+.nav a[aria-expanded="true"] .caret{transform:rotate(90deg)}
+.subnav{display:flex;flex-direction:column;margin:2px 0 4px 26px;border-left:1px solid var(--line);padding-left:6px}
+.subnav a{padding:5px 8px;border-radius:8px;color:var(--ink2);text-decoration:none;font-size:12.5px}
+.subnav a:hover{background:var(--bg2);color:var(--ink)}
+.subnav a.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
 .nav.sr a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .side .foot .by{color:var(--ink2);font-weight:600}
 .byline{margin:2px 0 10px;font-size:13px;color:var(--muted);font-style:italic}
@@ -402,7 +408,11 @@ ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-
     </div>
     <div class="navwrap" id="sideRecentWrap" hidden><div class="navlabel">Recent</div><nav class="nav sr" id="sideRecent"></nav></div>
     <div class="navwrap" id="toolsWrap"><div class="navlabel">Tools</div><nav class="nav">
-      <a href="#" id="flowBtn"><i>⇉</i>How it works</a>
+      <a href="#" id="flowBtn" aria-expanded="false" aria-controls="flowSub"><i>⇉</i>How it works<b class="caret">›</b></a>
+      <div class="subnav" id="flowSub" hidden>
+        <a href="#" data-flow="sc">Single-cell</a>
+        <a href="#" data-flow="bulk">Bulk</a>
+      </div>
       <a href="#" id="codeBtn"><i>&lt;/&gt;</i>View code</a>
       <a href="#" id="settingsBtn"><i>⚙</i>Settings &amp; API key</a>
       <a href="#" id="quitBtn" title="Stop the local server (finished analyses stay on disk)"><i>⏻</i>Quit RNAseq Bench</a>
@@ -1108,9 +1118,9 @@ const FLOWS = {
 
 function renderWorkflow(kind){
  const root=$("#workflow"),f=FLOWS[kind];
- root.innerHTML=`<div class="top"><span class="badge">how it works</span><h1>${f.label} workflow</h1>
-   <div class="seg" id="flowSeg">${Object.entries(FLOWS).map(([k,v])=>
-     `<button data-k="${k}" class="${k===kind?"on":""}">${v.label}</button>`).join("")}</div></div>
+ root.innerHTML=`<div class="top"><span class="badge">how it works</span><h1>${f.label} workflow</h1></div>
+  <div class="seg flowseg" id="flowSeg">${Object.entries(FLOWS).map(([k,v])=>
+     `<button data-k="${k}" class="${k===kind?"on":""}">${v.label}</button>`).join("")}</div>
   <p class="lede flowlede">${esc(f.lede)}</p>
   <ol class="flow">${f.steps.map((s,i)=>`<li>
     <div class="n">${i+1}</div>
@@ -1120,9 +1130,23 @@ function renderWorkflow(kind){
   <p class="hint flowfoot">Every step above writes its own figure into the report, with the same explanation applied to your
    own numbers. The exact parameters each run used are in that report's Parameters section, and the generated script
    reproduces the whole thing in plain Scanpy and PyDESeq2.</p>`;
- $$("#flowSeg button").forEach(b=>b.onclick=()=>renderWorkflow(b.dataset.k));
+ $$("#flowSeg button").forEach(b=>b.onclick=()=>{renderWorkflow(b.dataset.k);
+   $$("#flowSub a").forEach(a=>a.classList.toggle("on",a.dataset.flow===b.dataset.k))});
 }
-$("#flowBtn").onclick=e=>{e.preventDefault();renderWorkflow(S.result?.kind==="bulk"?"bulk":"sc");go("workflow")};
+function openFlow(kind){
+ renderWorkflow(kind);
+ $("#flowSub").hidden=false;$("#flowBtn").setAttribute("aria-expanded","true");
+ $$("#flowSub a").forEach(a=>a.classList.toggle("on",a.dataset.flow===kind));
+ go("workflow");
+}
+$("#flowBtn").onclick=e=>{e.preventDefault();
+ const open=$("#flowBtn").getAttribute("aria-expanded")==="true";
+ if(open&&!$("#workflow").hidden){                      // already open: collapse and go back
+  $("#flowSub").hidden=true;$("#flowBtn").setAttribute("aria-expanded","false");
+  $$("#flowSub a").forEach(a=>a.classList.remove("on"));
+  go(S.result?"results":"home");return}
+ openFlow(S.result?.kind==="bulk"?"bulk":"sc")};
+$$("#flowSub a").forEach(a=>a.onclick=e=>{e.preventDefault();openFlow(a.dataset.flow)});
 
 /* parameters panel — every choice, the reason for it, and one Re-analyze button */
 const TAGTXT={auto:"auto",user:"you set",default:"default",data:"from data",fixed:"fixed"};

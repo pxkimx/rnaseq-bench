@@ -1,5 +1,10 @@
 # RNAseq Bench changelog
 
+## 3.4.1
+- **How it works** expands in the sidebar into Single-cell and Bulk, so either pipeline is one click away
+  rather than two. Clicking the heading again collapses it and returns you where you were. The in-page
+  toggle and the sidebar stay in step, and that toggle now sits on the left, aligned with the text.
+
 ## 3.4
 - **New: "How it works" in the sidebar.** Every step of both pipelines — twelve for single-cell, eight
   for bulk — with a schematic of the idea, what the step does, and why it is done that way. The
