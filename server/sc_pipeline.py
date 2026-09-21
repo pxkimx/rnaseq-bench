@@ -81,7 +81,7 @@ def annotate_clusters(adata, cluster_key="leiden", layer="log1p"):
         # z-score across clusters, weighted by detection so absent genes don't dominate
         scores[ct] = (z[:, ids] * np.clip(frac[:, ids] * 2, 0, 1)).mean(1)
     if not scores:
-        return {c: ("Unassigned", 0.0, []) for c in clusters}, None
+        return {c: ("Unassigned", 0.0, []) for c in clusters}, None, []
     S = pd.DataFrame(scores, index=clusters)
     out, used = {}, {}
     for c in clusters:
@@ -94,6 +94,33 @@ def annotate_clusters(adata, cluster_key="leiden", layer="log1p"):
         label = best if val - second > 0.15 else f"{best} / {S.loc[c].drop(best).idxmax()}?"
         used[label] = used.get(label, 0) + 1
         out[c] = (label, val, ev)
+
+    # The score above is a z-score across clusters, which quietly punishes whichever cell type dominates:
+    # when nine of eighteen clusters are the same epithelium, its markers are high in most clusters, so no
+    # single one stands out and all of them fall below the threshold. The more abundant the cell type, the
+    # less likely it is to be named. So give unassigned clusters a second chance against the ones that were
+    # confidently named: a cluster whose whole expression profile matches a named cluster is that cell type.
+    named = [c for c in clusters if out[c][0] != "Unassigned"]
+    unnamed = [c for c in clusters if out[c][0] == "Unassigned"]
+    by_similarity = []
+    if named and unnamed:
+        hv = adata.var["highly_variable"].values if "highly_variable" in adata.var else np.ones(means.shape[1], bool)
+        C = np.corrcoef(means[:, hv])
+        idx = {c: i for i, c in enumerate(clusters)}
+        base = {c: out[c][0].split(" (")[0] for c in named}
+        for c in unnamed:
+            i = idx[c]
+            best_c = max(named, key=lambda d: C[i, idx[d]])
+            r = float(C[i, idx[best_c]])
+            other = [C[i, idx[d]] for d in named if base[d] != base[best_c]]
+            margin = r - (max(other) if other else -1.0)
+            # 0.90 with a clear margin: on real data, clusters of one type sit at 0.91-1.00 with each
+            # other while genuinely different types top out below 0.80
+            if r >= 0.90 and margin >= 0.05:
+                lbl = base[best_c]
+                used[lbl] = used.get(lbl, 0) + 1
+                out[c] = (lbl, out[c][1], out[best_c][2])
+                by_similarity.append(c)
     # number duplicates
     seen = {}
     for c in clusters:
@@ -101,7 +128,7 @@ def annotate_clusters(adata, cluster_key="leiden", layer="log1p"):
         if l != "Unassigned" and used.get(l, 0) > 1:
             seen[l] = seen.get(l, 0) + 1
             out[c] = (f"{l} ({seen[l]})", out[c][1], out[c][2])
-    return out, S
+    return out, S, by_similarity
 
 
 def _fig_of(ret):
@@ -436,7 +463,7 @@ def run(job: Job, files: list[Path], params: dict):
     # ---------------------------------------------------------------- markers
     job.step(75, "Finding marker genes (Wilcoxon)")
     sc.tl.rank_genes_groups(adata, "leiden", method="wilcoxon", layer="log1p", use_raw=False, pts=True)
-    ann, S = annotate_clusters(adata)
+    ann, S, ann_sim = annotate_clusters(adata)
     adata.obs["cell_type"] = adata.obs["leiden"].map({c: f"{c}: {v[0]}" if v[0] != "Unassigned" else f"{c}: Unassigned" for c, v in ann.items()}).astype("category")
     adata.obs["cell_type_simple"] = adata.obs["leiden"].map({c: re.sub(r" \(\d+\)$", "", v[0]) for c, v in ann.items()}).astype("category")
     cl_colors = [PALETTE[i % 20] for i in range(K)]
@@ -468,6 +495,10 @@ def run(job: Job, files: list[Path], params: dict):
     named = [(c, v) for c, v in ann.items() if v[0] != "Unassigned"]
     job.flag("ok", f"Leiden found <b>{K}</b> clusters. Marker-based labels: " +
              (", ".join(f"{c} = {v[0]}" for c, v in named) if named else "none matched the reference panel confidently") + ".")
+    if ann_sim:
+        job.flag("info", f"Cluster{'s' if len(ann_sim) > 1 else ''} {', '.join(ann_sim)} matched no marker panel strongly "
+                         "on their own, but their overall expression closely matches a cluster that did, so they were "
+                         "labelled as the same cell type — most often a second state of an abundant population.")
     unl = [c for c, v in ann.items() if v[0] == "Unassigned"]
     if unl:
         job.flag("warn", f"Clusters {', '.join(unl)} had no confident label — possibly a cell type outside the panel, residual doublets or stressed cells. Check their markers below.")

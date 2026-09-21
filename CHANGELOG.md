@@ -1,5 +1,16 @@
 # RNAseq Bench changelog
 
+## 3.2.5
+- **The most abundant cell type was the least likely to be named.** Cluster labels are scored as a
+  z-score across clusters, so when one population occupies many clusters its markers are high in most of
+  them, none stands out, and all of them fall below the confidence threshold — exactly backwards. On a
+  choroid plexus dataset that left six clusters and 36% of the cells "Unassigned" while their own best
+  match was the epithelium the run had already named elsewhere. Clusters that match no panel on their own
+  are now compared against the clusters that were confidently named, and take that label when their whole
+  expression profile matches one closely (on real data, clusters of one type correlate 0.91-1.00 while
+  genuinely different types stay below 0.80). The same run now leaves 7% unassigned, and says which
+  clusters were labelled this way rather than by their own markers.
+
 ## 3.2.4
 Found while comparing a run against a published choroid plexus figure.
 
