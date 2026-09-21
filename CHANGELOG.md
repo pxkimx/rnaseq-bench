@@ -1,5 +1,11 @@
 # RNAseq Bench changelog
 
+## 3.3.2
+- Cleaner animation: cluster tails are truncated so populations stay compact instead of spraying stray
+  cells, and the scattered points are cut from 2% to 0.4% and placed around the structure rather than
+  across the whole frame. At 7,000 cells a plain Gaussian tail reads as dirt on the screen rather than
+  as biology.
+
 ## 3.3.1
 - The home animation now draws **7,000 cells in 14 populations** — the density of a real embedding rather
   than a sketch of one — in a brighter palette, batched one fill per population so it holds 60fps. The
