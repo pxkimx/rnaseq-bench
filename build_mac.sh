@@ -17,6 +17,10 @@ rm -rf "$APP/Contents/Resources/app/server" "$APP/Contents/Resources/app/web" "$
 # examples/ holds the bulk example dataset the home screen offers; without it that button 500s in the
 # packaged app while working fine from source
 cp -R server web examples requirements.txt README.md VERSION CHANGELOG.md launch.sh "$APP/Contents/Resources/app/"
+# keep the launcher icon in step with macos/make_icon.py, so a rebuilt app never keeps an old mark
+for ic in AppIcon.icns AppIcon.png; do
+  [ -f "macos/RNAseq Bench.app/Contents/Resources/$ic" ] && cp "macos/RNAseq Bench.app/Contents/Resources/$ic" "$APP/Contents/Resources/$ic"
+done
 find "$APP" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 chmod +x "$APP/Contents/MacOS/"* "$APP/Contents/Resources/app/launch.sh"
 echo "app updated: $APP (v$V)"
