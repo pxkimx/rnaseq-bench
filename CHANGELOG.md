@@ -1,5 +1,12 @@
 # RNAseq Bench changelog
 
+## 3.7
+- **One button starts an analysis, not two.** The GEO panel had its own Download & analyze sitting above
+  the settings, so that route reached a running analysis without ever passing them — which is how the
+  settings could be skipped. GEO now only picks files; the single button at the bottom runs whichever
+  source is set up and names what it will do, "Run analysis" or "Download & analyze (2 files)". With
+  both an upload and GEO files ticked it stays disabled and says to clear one.
+
 ## 3.6.1
 - **The example datasets were not going through the settings confirmation.** Both of them download and
   analyse, so they now do — 3.6 gated Run analysis and GEO's Download & analyze but left these two.

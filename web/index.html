@@ -464,7 +464,7 @@ ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-
               <div class="geo" style="padding:4px 12px 14px">
                 <div class="row"><input type="text" id="geoAcc" placeholder="GSE306264" style="flex:1;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel2)"><button class="btn sm" id="geoList">List files</button></div>
                 <div class="list" id="geoFiles" hidden></div>
-                <div class="row between" id="geoRun" hidden><span class="hint">Tick the counts file (and series matrix for sample annotations)</span><button class="btn accent sm" id="geoGo">Download &amp; analyze</button></div>
+                <div class="row between" id="geoRun" hidden><span class="hint">Tick the counts file (and the series matrix for sample annotations), then check the settings below and press <b>Download &amp; analyze</b>.</span></div>
               </div>
             </details>
             <details class="settings" id="settings">
@@ -502,6 +502,7 @@ ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-
                 <label class="cb full"><input type="checkbox" id="b_enrichment" checked> Pathway enrichment (Enrichr, needs internet)</label>
               </div>
             </details>
+            <div class="hint" id="runHint" style="margin:0 2px;color:var(--warn)"></div>
             <div class="row" id="confirmRow">
               <label class="cb"><input type="checkbox" id="confirmChk"> I have checked the analysis settings above</label>
             </div>
@@ -705,18 +706,43 @@ function settingsOK(){
  toast("Check the analysis settings, then tick the box to start.");
  return false;
 }
-$("#confirmChk").onchange=()=>{$("#runBtn").disabled=!S.files.length||!$("#confirmChk").checked;
- $("#confirmRow").classList.remove("need")};
+$("#confirmChk").onchange=()=>{syncRun();$("#confirmRow").classList.remove("need")};
 $("#settings").addEventListener("input",()=>{        // a change after confirming needs confirming again
  if($("#confirmChk").checked){$("#confirmChk").checked=false;$("#confirmChk").onchange();
   toast("Settings changed — confirm them again before running.")}});
 
-function renderFiles(){const L=$("#fileList");L.innerHTML="";S.files.forEach((f,i)=>{const r=el("div","file",`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg><span class="n">${esc(f.name)}</span><span class="s">${size(f.size)}</span>`);const x=el("button","btn ghost sm","✕");x.setAttribute("aria-label","Remove "+f.name);x.onclick=()=>{S.files.splice(i,1);renderFiles()};r.appendChild(x);L.appendChild(r)});$("#runBtn").disabled=!S.files.length||!$("#confirmChk").checked;syncForms()}
+function renderFiles(){const L=$("#fileList");L.innerHTML="";S.files.forEach((f,i)=>{const r=el("div","file",`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg><span class="n">${esc(f.name)}</span><span class="s">${size(f.size)}</span>`);const x=el("button","btn ghost sm","✕");x.setAttribute("aria-label","Remove "+f.name);x.onclick=()=>{S.files.splice(i,1);renderFiles()};r.appendChild(x);L.appendChild(r)});syncRun();syncForms()}
 function collectParams(kind){const p={};if(kind==="bulk"){for(const k of["factor","reference","alternative","groups"]){const v=$("#b_"+k).value.trim();if(v)p[k]=v}const cv=$("#b_covariates").value.trim();if(cv)p.covariates=cv.split(",").map(s=>s.trim()).filter(Boolean);p.alpha=+$("#b_alpha").value||.05;p.lfc=+$("#b_lfc").value||1;p.enrichment=$("#b_enrichment").checked;p.collapse_replicates=$("#b_collapse").value;p.infer_sex=$("#b_infer_sex").checked}
  else{for(const k of["min_genes","max_genes","max_mt","n_hvg","n_pcs"]){const v=$("#s_"+k).value;if(v!=="")p[k]=+v}p.resolution=+$("#s_resolution").value;const b=$("#s_batch_key").value.trim();if(b)p.batch_key=b;p.doublets=$("#s_doublets").checked?"auto":false;p.integrate=$("#s_integrate").value;p.pseudobulk=$("#s_pseudobulk").checked;const sk=$("#s_sample_key").value.trim(),ck=$("#s_condition_key").value.trim();if(sk)p.sample_key=sk;if(ck)p.condition_key=ck}return p}
-$("#runBtn").onclick=async()=>{if(!settingsOK())return;const kind=S.kind==="auto"?guessKind():S.kind;const fd=new FormData();S.files.forEach(f=>fd.append("files",f));fd.append("kind",S.kind);fd.append("params",JSON.stringify(collectParams(kind)));
+/* One button. Two buttons that both start an analysis, one of them above the settings, meant the
+   settings could be skipped entirely by going through GEO — so GEO now only picks files and this is
+   the single place a run begins, whichever source it came from. */
+const geoUrls=()=>[...$("#geoFiles").querySelectorAll("input:checked")].map(x=>x.value);
+function syncRun(){
+ const g=geoUrls().length, f=S.files.length, ok=$("#confirmChk").checked;
+ $("#runBtn").disabled=!(f||g)||!ok||(f&&g);
+ $("#runBtn").textContent=f?"Run analysis":g?`Download & analyze (${g} file${g>1?"s":""})`:"Run analysis";
+ $("#runHint").textContent=(f&&g)?"You have both uploaded files and GEO files ticked — clear one of them.":"";
+}
+$("#runBtn").onclick=async()=>{
+ const urls=geoUrls();
+ if(S.files.length&&urls.length){toast("Pick one source: uploaded files or GEO, not both.");return}
+ if(!S.files.length&&!urls.length){toast("Add a file, or tick one from GEO.");return}
+ if(!settingsOK())return;
+ if(urls.length){                                   // GEO: the server downloads, then analyses
+  const kind=S.kind,acc=$("#geoAcc").value.trim();
+  showRunning(kind==="auto"?"bulk":kind,"Downloading from GEO…");
+  try{const r=await fetch("/api/geo/import",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({accession:acc,urls,kind,params:collectParams(kind==="auto"?"bulk":kind)})});
+   if(!r.ok)throw new Error(await r.text());
+   const j=await r.json();startPoll(j.job,j.kind==="auto"?"bulk":j.kind)}
+  catch(e){runError("Could not start the GEO download: "+e.message)}
+  return}
+ const kind=S.kind==="auto"?guessKind():S.kind;const fd=new FormData();
+ S.files.forEach(f=>fd.append("files",f));fd.append("kind",S.kind);fd.append("params",JSON.stringify(collectParams(kind)));
  showRunning(kind,"Uploading "+S.files.length+" file"+(S.files.length>1?"s":"")+"…");
- try{const r=await fetch("/api/analyze",{method:"POST",body:fd});if(!r.ok)throw new Error(await r.text());const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError("Upload failed: "+e.message)}};
+ try{const r=await fetch("/api/analyze",{method:"POST",body:fd});if(!r.ok)throw new Error(await r.text());
+  const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError("Upload failed: "+e.message)}};
 $("#demoSc").onclick=()=>demo("sc");$("#demoBulk").onclick=()=>demo("bulk");
 async function demo(w){if(!settingsOK())return;showRunning(w,w==="sc"?"Fetching PBMC 3k…":"Loading GSE96870…");try{const r=await fetch("/api/demo/"+w,{method:"POST"});const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError(e.message)}}
 $("#newBtn").onclick=$("#homeLink").onclick=e=>{e.preventDefault();go("home")};
@@ -1301,10 +1327,9 @@ $("#geoList").onclick=async()=>{const acc=$("#geoAcc").value.trim();if(!acc)retu
   const hasData=j.files.some(isData);
   const fmtSz=x=>{const n=parseFloat(x);if(!x||isNaN(n))return x||"";if(/[KMG]$/.test(x))return x;return n>=1e9?(n/1e9).toFixed(2)+" GB":n>=1e6?(n/1e6).toFixed(0)+" MB":n>=1e3?(n/1e3).toFixed(0)+" KB":n+" B"};
   $("#geoFiles").innerHTML=j.files.map((f,i)=>{const chk=f.url&&(/series_matrix/i.test(f.name)||isData(f)||(!hasData&&/_RAW\.tar$/i.test(f.name)));return `<label><input type="checkbox" value="${esc(f.url)}" ${chk?"checked":""} ${f.url?"":"disabled"}><span>${esc(f.name)}</span><span class="sz">${esc(fmtSz(f.size))}</span></label>`}).join("");
-  $("#geoRun").hidden=false;const big=j.files.filter(f=>f.url&&parseFloat(f.size)>2e9).map(f=>f.name);$("#geoRun").querySelector(".hint").textContent=big.length?`Large files (${big.join(", ")}) can take a while and need free disk space.`:"Pre-ticked: the counts/matrix file (or RAW.tar when that is the only data) plus the series matrix for sample annotations.";}
+  $("#geoRun").hidden=false;$("#geoFiles").onchange=syncRun;syncRun();const big=j.files.filter(f=>f.url&&parseFloat(f.size)>2e9).map(f=>f.name);$("#geoRun").querySelector(".hint").textContent=big.length?`Large files (${big.join(", ")}) can take a while and need free disk space.`:"Pre-ticked: the counts/matrix file (or RAW.tar when that is the only data) plus the series matrix for sample annotations.";}
  catch(e){$("#geoFiles").innerHTML=`<label class="hint" style="padding:8px 10px">${esc(e.message)}</label>`}};
-$("#geoGo").onclick=async()=>{const urls=[...$("#geoFiles").querySelectorAll("input:checked")].map(x=>x.value);if(!urls.length){toast("Tick at least one file.");return}if(!settingsOK())return;const acc=$("#geoAcc").value.trim();
- const kind=S.kind;showRunning(kind==="auto"?"bulk":kind,"Downloading from GEO…");const r=await fetch("/api/geo/import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accession:acc,urls,kind,params:collectParams(kind==="auto"?"bulk":kind)})});const j=await r.json();startPoll(j.job,j.kind==="auto"?"bulk":j.kind)};
+
 
 /* code viewer */
 async function openCode(job){const w=el("div","codewrap");w.innerHTML=`<div class="files"><div class="navlabel">This analysis</div><a data-k="script" class="on">reproduce_analysis.py</a><div class="navlabel">Pipeline source</div><div id="srcList"></div></div>
