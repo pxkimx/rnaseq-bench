@@ -1,8 +1,6 @@
 # RNAseq Bench changelog
 
 ## 3.3.4
-- The mark is now a small embedding: five populations drawn as **56 individual cells** rather than solid
-  discs, tilted and unevenly sized the way clusters actually are.
 - *created by Paul H. Kim, Ph.D.* is set in italic, in the sidebar and under the hero title.
 
 ## 3.3.3
