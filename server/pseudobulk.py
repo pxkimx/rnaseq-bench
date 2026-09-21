@@ -174,6 +174,7 @@ def run(job: Job, adata, sample_key: str, condition_key: str, covariates: list[s
 
     # per cell type
     summary = []
+    per_type_lfc = {}
     ct_counts = pd.crosstab(obs[sample_key], obs[cluster_key])
     for ct in ct_counts.columns:
         ok = ct_counts.index[ct_counts[ct] >= min_cells]
@@ -187,11 +188,14 @@ def run(job: Job, adata, sample_key: str, condition_key: str, covariates: list[s
         except Exception as e:  # noqa: BLE001
             summary.append([ct, len(ok), "—", "—", f"failed ({type(e).__name__})"]); continue
         u, d = s_c[s_c.log2FoldChange > 0], s_c[s_c.log2FoldChange < 0]
+        per_type_lfc[str(ct)] = r_c[["log2FoldChange", "padj"]]
         summary.append([ct, len(meta_c), len(u), len(d), ", ".join(u.head(5).index) or "—"])
         if len(s_c) >= 5:
             job.figure(f"pseudobulk_volcano_{re.sub(r'[^A-Za-z0-9]+', '_', str(ct))}", f"{ct}: {alt} vs {ref}", volcano(r_c, s_c, f"{ct} · {len(meta_c)} samples"),
                        how="Same test, restricted to one cell type — the change within that population rather than a change in its abundance.",
                        yours=f"{len(u)} up, {len(d)} down." + (f" Top up: {', '.join(u.head(4).index)}." if len(u) else ""))
+    if len(per_type_lfc) >= 2:
+        _changed_by_type(job, r_all, s_all, per_type_lfc, alt, ref)
     if summary:
         job.table("pseudobulk_by_type", "Pseudobulk DESeq2 per cell type", ["Cell type", "Samples", "Up", "Down", "Top up-regulated"], summary,
                   note=f"Only cell types with ≥{min_cells} cells in ≥{min_samples} samples per group are tested. Per-type CSVs are in the job folder.")
@@ -199,3 +203,69 @@ def run(job: Job, adata, sample_key: str, condition_key: str, covariates: list[s
     job.method("Composition", f"Per-sample cell-type percentages compared between {condition_key} groups with a Mann–Whitney test, Bonferroni-adjusted across cell types.")
     job.method("Pseudobulk DE", f"Raw counts summed per {sample_key} (and per {sample_key} × cell type), PyDESeq2 with design {design}, Wald test, BH FDR. Threshold padj &lt; 0.05 and |log2FC| ≥ 1.")
     return out
+
+
+def _changed_by_type(job: Job, r_all, s_all, per_type, alt: str, ref: str, n: int = 12):
+    """Which genes changed most, and in which cell type — one figure instead of a stack of volcanoes.
+
+    A volcano per population answers "what changed here?" one population at a time. The question people
+    actually ask of a condition comparison is the other way round: for the genes that changed, is this a
+    whole-tissue shift or one cell type carrying it? Same DESeq2 results, arranged to answer that.
+    """
+    try:
+        sig = s_all.reindex(s_all.log2FoldChange.abs().sort_values(ascending=False).index)
+        up = sig[sig.log2FoldChange > 0].head(n).index.tolist()
+        dn = sig[sig.log2FoldChange < 0].head(n).index.tolist()
+        genes = up + dn
+        if len(genes) < 4:
+            return
+        types = list(per_type)
+        M = pd.DataFrame(index=genes, columns=types, dtype=float)
+        Q = pd.DataFrame(index=genes, columns=types, dtype=float)
+        for t in types:
+            d = per_type[t].reindex(genes)
+            M[t] = d["log2FoldChange"].values
+            Q[t] = d["padj"].values
+        M = M.dropna(how="all")
+        if M.empty:
+            return
+        lim = float(np.nanpercentile(np.abs(M.values), 98)) or 1.0
+        fig, ax = plt.subplots(figsize=(1.0 * len(types) + 3.6, 0.32 * len(M) + 1.8))
+        im = ax.imshow(M.values, aspect="auto", cmap="RdBu_r", vmin=-lim, vmax=lim)
+        ax.set_xticks(range(len(types))); ax.set_xticklabels(types, rotation=35, ha="right", fontsize=8)
+        ax.set_yticks(range(len(M))); ax.set_yticklabels(M.index, fontsize=7.5)
+        for i, g in enumerate(M.index):
+            for j, t in enumerate(types):
+                if pd.notna(Q.loc[g, t]) and Q.loc[g, t] < 0.05:
+                    ax.text(j, i, "*", ha="center", va="center", fontsize=9,
+                            color="white" if abs(M.loc[g, t]) > 0.6 * lim else "#222")
+        if up and dn and len(set(up) & set(M.index)):
+            ax.axhline(len([g for g in up if g in M.index]) - 0.5, color="#222", lw=1.2)
+        ax.set_title(f"Genes that changed most ({alt} vs {ref}), by cell type", fontsize=10)
+        fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02, label="log2 fold change")
+        fig.tight_layout()
+        job.figure("changed_by_type", "Top changed genes across cell types", fig, wide=len(types) > 6,
+                   sub="* = padj < 0.05 in that cell type · red = up in " + alt + " · grey = not testable there",
+                   how="The genes with the largest overall change, then each one's fold change measured separately "
+                       "inside every cell type that had enough cells and samples to test. Read across a row: a row "
+                       "that is red everywhere is a tissue-wide response, while a row red in one column only is a "
+                       "change carried by that population alone.",
+                   yours=_changed_summary(M, Q, alt))
+    except Exception:  # noqa: BLE001
+        log_exc("changed by type")
+
+
+def _changed_summary(M, Q, alt: str) -> str:
+    sig_counts = (Q < 0.05).sum(1)
+    focal = sig_counts[sig_counts == 1]
+    broad = sig_counts[sig_counts >= max(2, int(0.6 * Q.shape[1]))]
+    bits = []
+    if len(broad):
+        bits.append(f"<b>{', '.join(broad.index[:4])}</b> changed in most cell types — a tissue-wide response.")
+    if len(focal):
+        where = {g: Q.columns[(Q.loc[g] < 0.05).values][0] for g in focal.index[:3]}
+        bits.append("Carried by a single population: " + "; ".join(f"<b>{g}</b> in {t}" for g, t in where.items()) + ".")
+    if not bits:
+        bits.append("No gene reached significance inside an individual cell type — usually too few samples per "
+                    "group once the cells are split up, so read the whole-tissue comparison instead.")
+    return " ".join(bits)

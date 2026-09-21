@@ -1,5 +1,16 @@
 # RNAseq Bench changelog
 
+## 3.2.7
+- **Feature plots are drawn the way published ones are.** Cells with no detected expression are light
+  grey and only expressing cells are coloured, on a white-to-red scale. On the previous viridis scale
+  zero was dark purple, so a gene detected in 1% of cells — which is most genes worth plotting — painted
+  an almost uniformly dark panel and its signal was invisible.
+- **New figure: top changed genes across cell types.** A volcano per population answers "what changed
+  here?" one population at a time. The question usually asked of a condition comparison is the reverse:
+  for the genes that changed, is this a tissue-wide shift or is one cell type carrying it? The genes with
+  the largest overall change are shown against every cell type that could be tested, coloured by fold
+  change with significance marked, and the caption says which reading applies.
+
 ## 3.2.6
 - **Dissociation stress is now scored and reported.** Warm enzymatic dissociation makes tissue transcribe
   immediate-early and heat-shock genes (FOS, JUN, EGR1, HSPA1A…) within minutes; the cells that respond

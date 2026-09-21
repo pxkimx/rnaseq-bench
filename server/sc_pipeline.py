@@ -15,7 +15,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sp
 
-from .common import PALETTE, Job, UserFacingError, commas, fmt_n, pct, style, log_exc
+from .common import PALETTE, Job, UserFacingError, commas, feature_scatter, fmt_n, pct, style, log_exc
 from .io_utils import load_single_cell
 from .markers import CELL_TYPE_MARKERS, DISSOCIATION_GENES, G2M_GENES, S_GENES
 
@@ -158,11 +158,11 @@ def _user_feature_plots(job, adata, genes):
     fig, axs = plt.subplots(rows, cols, figsize=(3.2 * cols, 2.9 * rows), squeeze=False)
     for ax, g in zip(axs.ravel(), want):
         v = b[:, g].X; v = np.asarray(v.toarray() if hasattr(v, "toarray") else v).ravel()
-        o = np.argsort(v, kind="stable")
-        sca = ax.scatter(xy[o, 0], xy[o, 1], c=v[o], s=2, cmap="viridis", linewidths=0, rasterized=True, vmax=np.percentile(v, 99) or 1)
+        sca = feature_scatter(ax, xy, v)
         pct = 100 * (v > 0).mean()
         ax.set_title(f"{g} · {pct:.0f}% of cells", fontsize=8); ax.set_xticks([]); ax.set_yticks([])
-        plt.colorbar(sca, ax=ax, fraction=0.04, pad=0.02).ax.tick_params(labelsize=6)
+        if sca is not None:
+            plt.colorbar(sca, ax=ax, fraction=0.04, pad=0.02).ax.tick_params(labelsize=6)
     for ax in axs.ravel()[len(want):]:
         ax.axis("off")
     fig.tight_layout()

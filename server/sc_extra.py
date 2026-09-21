@@ -20,7 +20,7 @@ import pandas as pd
 import scanpy as sc
 
 from . import resources
-from .common import PALETTE, Job, commas, log_exc
+from .common import PALETTE, Job, commas, feature_scatter, log_exc
 
 
 def _lognorm(adata) -> "sc.AnnData":
@@ -63,12 +63,10 @@ def feature_plots(job: Job, adata, cluster_key: str = "leiden", label_key: str =
         n = len(genes); cols = 4; rows = int(np.ceil(n / cols))
         fig, axs = plt.subplots(rows, cols, figsize=(3.2 * cols, 2.9 * rows), squeeze=False)
         xy = b.obsm["X_umap"]
-        order = np.random.default_rng(0).permutation(b.n_obs)
         for ax, g in zip(axs.ravel(), genes):
             v = b[:, g].X
             v = np.asarray(v.toarray() if hasattr(v, "toarray") else v).ravel()
-            o = np.argsort(v[order], kind="stable"); idx = order[o]          # high values drawn last
-            sca = ax.scatter(xy[idx, 0], xy[idx, 1], c=v[idx], s=2, cmap="viridis", linewidths=0, rasterized=True, vmax=np.percentile(v, 99) or 1)
+            sca = feature_scatter(ax, xy, v)
             lab = ""
             for c, gl in top.items():
                 if g in gl:
@@ -76,7 +74,8 @@ def feature_plots(job: Job, adata, cluster_key: str = "leiden", label_key: str =
                     lab = f" · cluster {c}" + (f" ({cl.iloc[0]})" if len(cl) and label_key in adata.obs else "")
                     break
             ax.set_title(g + lab, fontsize=8); ax.set_xticks([]); ax.set_yticks([])
-            plt.colorbar(sca, ax=ax, fraction=0.04, pad=0.02).ax.tick_params(labelsize=6)
+            if sca is not None:
+                plt.colorbar(sca, ax=ax, fraction=0.04, pad=0.02).ax.tick_params(labelsize=6)
         for ax in axs.ravel()[n:]:
             ax.axis("off")
         fig.tight_layout()

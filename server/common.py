@@ -180,3 +180,23 @@ def commas(v):
 
 def pct(a, b):
     return f"{100*a/b:.1f}%" if b else "0%"
+
+
+def feature_scatter(ax, xy, v, size=2):
+    """Draw one gene's expression on an embedding, the way published feature plots do.
+
+    Cells with no detected expression go down first in light grey, and only the cells that express the
+    gene are coloured. On a viridis scale zero is dark purple, so a gene detected in 1% of cells paints
+    an almost uniformly dark panel and its signal is invisible — which is the opposite of the point.
+    """
+    import numpy as np
+    v = np.asarray(v, float)
+    off = v <= 0
+    ax.scatter(xy[off, 0], xy[off, 1], s=size, c="#e8eaec", linewidths=0, rasterized=True)
+    on = ~off
+    if on.sum():
+        o = np.argsort(v[on], kind="stable")          # brightest cells drawn last
+        hi = float(np.percentile(v[on], 99)) or float(v[on].max()) or 1.0
+        return ax.scatter(xy[on][o, 0], xy[on][o, 1], s=size, c=v[on][o], cmap="Reds",
+                          vmin=0, vmax=hi, linewidths=0, rasterized=True)
+    return None
