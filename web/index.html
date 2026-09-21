@@ -45,7 +45,7 @@ aside.side{position:sticky;top:0;height:100vh;border-right:1px solid var(--line)
 .logo{display:flex;flex-direction:column;align-items:flex-start;gap:11px;padding:6px 6px 2px;text-decoration:none;color:var(--ink)}
 .logo svg{flex:none;filter:drop-shadow(0 3px 12px var(--glow))}
 .logo b{display:block;font-weight:700;font-size:27px;letter-spacing:-.03em;line-height:1.05}
-.logo .who{display:block;font-size:13px;color:var(--ink2);font-weight:550;margin-top:5px;letter-spacing:.005em}
+.logo .who{display:block;font-size:13px;color:var(--ink2);font-weight:550;font-style:italic;margin-top:5px;letter-spacing:.005em}
 .logo small{display:block;font:500 10.5px var(--mono);color:var(--muted);letter-spacing:.02em;margin-top:5px}
 .navlabel{font:500 10.5px var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:0 8px;margin-bottom:6px}
 .nav a{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;color:var(--ink2);text-decoration:none;font-weight:500}
@@ -354,7 +354,7 @@ body.chat-open .fab{display:none}
 .nav.sr a small{display:block;font:10.5px var(--mono);color:var(--muted)}
 .nav.sr a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .side .foot .by{color:var(--ink2);font-weight:600}
-.byline{margin:2px 0 10px;font-size:13px;color:var(--muted)}
+.byline{margin:2px 0 10px;font-size:13px;color:var(--muted);font-style:italic}
 .byline b{color:var(--ink2);font-weight:600}
 @media (prefers-reduced-motion: reduce){.jobcard .dot{animation:none;opacity:.9}}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:80;font-size:13px}
@@ -365,10 +365,13 @@ body.chat-open .fab{display:none}
   <aside class="side">
     <a class="logo" href="#" id="homeLink">
       <svg width="58" height="58" viewBox="0 0 32 32" aria-hidden="true">
+        <!-- the mark is a small embedding: each population is a cloud of cells, not a disc -->
         <circle cx="16" cy="16" r="15" fill="var(--ink)"/>
-        <circle cx="10.5" cy="12" r="3.4" fill="#00e0cf"/><circle cx="20.5" cy="17.5" r="4.4" fill="#ffb020"/>
-        <circle cx="12.8" cy="21.8" r="2.4" fill="#ff5c8a"/><circle cx="21.2" cy="9.2" r="1.6" fill="#4ea3ff"/>
-        <circle cx="24" cy="23" r="1.3" fill="#b27bff"/><circle cx="7.5" cy="18.5" r="1.2" fill="#a3e635"/>
+        <g fill="#00e0cf"><circle cx="7.9" cy="13.8" r="0.78"/><circle cx="12.1" cy="9.8" r="0.78"/><circle cx="7.3" cy="13.3" r="0.78"/><circle cx="12.2" cy="12.9" r="0.78"/><circle cx="6.6" cy="11.3" r="0.78"/><circle cx="12.2" cy="11.7" r="0.78"/><circle cx="14.5" cy="11.4" r="0.78"/><circle cx="9.9" cy="11.5" r="0.78"/><circle cx="9.0" cy="11.0" r="0.78"/><circle cx="7.9" cy="13.3" r="0.78"/><circle cx="10.3" cy="11.1" r="0.78"/><circle cx="10.4" cy="12.3" r="0.78"/><circle cx="12.7" cy="12.6" r="0.78"/><circle cx="11.3" cy="12.6" r="0.78"/><circle cx="7.0" cy="13.2" r="0.78"/></g>
+        <g fill="#ffb020"><circle cx="16.5" cy="15.9" r="0.78"/><circle cx="18.3" cy="17.1" r="0.78"/><circle cx="19.7" cy="19.3" r="0.78"/><circle cx="17.2" cy="15.5" r="0.78"/><circle cx="22.5" cy="18.2" r="0.78"/><circle cx="21.5" cy="18.2" r="0.78"/><circle cx="17.3" cy="17.6" r="0.78"/><circle cx="18.8" cy="15.6" r="0.78"/><circle cx="23.7" cy="17.5" r="0.78"/><circle cx="23.5" cy="18.5" r="0.78"/><circle cx="23.6" cy="20.3" r="0.78"/><circle cx="21.7" cy="16.2" r="0.78"/><circle cx="22.3" cy="19.4" r="0.78"/><circle cx="25.5" cy="18.8" r="0.78"/><circle cx="21.7" cy="19.3" r="0.78"/><circle cx="21.2" cy="18.4" r="0.78"/><circle cx="21.6" cy="16.6" r="0.78"/><circle cx="18.1" cy="15.6" r="0.78"/></g>
+        <g fill="#ff5c8a"><circle cx="11.6" cy="23.8" r="0.78"/><circle cx="12.6" cy="24.0" r="0.78"/><circle cx="12.8" cy="23.4" r="0.78"/><circle cx="12.0" cy="22.5" r="0.78"/><circle cx="13.0" cy="20.5" r="0.78"/><circle cx="11.8" cy="22.8" r="0.78"/><circle cx="14.9" cy="21.9" r="0.78"/><circle cx="13.7" cy="21.0" r="0.78"/><circle cx="12.1" cy="21.8" r="0.78"/><circle cx="13.1" cy="23.9" r="0.78"/></g>
+        <g fill="#4ea3ff"><circle cx="21.7" cy="10.7" r="0.78"/><circle cx="20.6" cy="10.4" r="0.78"/><circle cx="22.8" cy="8.8" r="0.78"/><circle cx="20.3" cy="9.9" r="0.78"/><circle cx="22.4" cy="10.8" r="0.78"/><circle cx="20.1" cy="9.7" r="0.78"/><circle cx="22.2" cy="9.1" r="0.78"/></g>
+        <g fill="#b27bff"><circle cx="24.1" cy="24.1" r="0.78"/><circle cx="22.5" cy="22.3" r="0.78"/><circle cx="23.5" cy="23.6" r="0.78"/><circle cx="23.1" cy="24.4" r="0.78"/><circle cx="23.5" cy="22.4" r="0.78"/><circle cx="22.7" cy="23.5" r="0.78"/></g>
       </svg>
       <span><b>RNAseq Bench</b><span class="who">created by Paul H. Kim, Ph.D.</span><small>scanpy · pydeseq2 · <span id="appVersion"></span></small></span>
     </a>
