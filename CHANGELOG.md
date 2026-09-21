@@ -1,5 +1,14 @@
 # RNAseq Bench changelog
 
+## 3.4
+- **New: "How it works" in the sidebar.** Every step of both pipelines — twelve for single-cell, eight
+  for bulk — with a schematic of the idea, what the step does, and why it is done that way. The
+  illustrations are diagrams of the reasoning rather than miniature figures: the real figure for your own
+  data is already in the report. It covers the things that are easy to get wrong — why cut-offs come from
+  your data instead of a fixed number, what a doublet looks like, why the distance between two far-apart
+  clusters on a UMAP means nothing, why dispersion is shrunk toward a trend, and why cells from one
+  animal are summed per sample before anything is tested.
+
 ## 3.3.7
 - The mark's axes carry tick marks, in the sidebar, the tab icon and the launcher icon.
 - The masthead runs horizontally again — mark on the left, name and byline beside it — with the wordmark

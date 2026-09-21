@@ -327,6 +327,21 @@ body.chat-open .fab{display:none}
 .hero h1 em{text-shadow:none}   /* clipped-gradient text: a shadow would paint straight over it */
 .hero .chip{background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .hero .eyebrow{backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+/* How it works */
+#workflow .flowlede{max-width:70ch;margin:14px 0 4px}
+#workflow .seg{margin-left:auto}
+ol.flow{list-style:none;padding:0;margin:18px 0 0;display:flex;flex-direction:column;gap:12px}
+ol.flow li{display:grid;grid-template-columns:34px 190px minmax(0,1fr);gap:16px;align-items:start;
+ border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:16px 18px}
+ol.flow .n{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font:600 13px var(--mono);
+ background:var(--accent-soft);color:var(--accent)}
+ol.flow .ill{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:6px}
+ol.flow .ill svg{display:block;width:100%;height:auto}
+ol.flow h3{margin:2px 0 6px;font-size:15px}
+ol.flow .what{margin:0 0 8px;font-size:13.5px;line-height:1.55;color:var(--ink2)}
+ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-left:2px solid var(--accent);padding-left:10px}
+#workflow .flowfoot{margin:18px 0 40px;max-width:70ch}
+@media (max-width:820px){ol.flow li{grid-template-columns:28px minmax(0,1fr)}ol.flow .ill{grid-column:1/-1}}
 .zoomctl .btn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .selbox{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
 .selbox .selhead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
@@ -387,6 +402,7 @@ body.chat-open .fab{display:none}
     </div>
     <div class="navwrap" id="sideRecentWrap" hidden><div class="navlabel">Recent</div><nav class="nav sr" id="sideRecent"></nav></div>
     <div class="navwrap" id="toolsWrap"><div class="navlabel">Tools</div><nav class="nav">
+      <a href="#" id="flowBtn"><i>⇉</i>How it works</a>
       <a href="#" id="codeBtn"><i>&lt;/&gt;</i>View code</a>
       <a href="#" id="settingsBtn"><i>⚙</i>Settings &amp; API key</a>
       <a href="#" id="quitBtn" title="Stop the local server (finished analyses stay on disk)"><i>⏻</i>Quit RNAseq Bench</a>
@@ -496,6 +512,9 @@ body.chat-open .fab{display:none}
 
     <!-- RESULTS -->
     <div id="results" hidden></div>
+
+    <!-- WORKFLOW -->
+    <div id="workflow" hidden></div>
   </main>
 </div>
 <div class="tip" id="tip" hidden></div>
@@ -656,7 +675,7 @@ $("#demoSc").onclick=()=>demo("sc");$("#demoBulk").onclick=()=>demo("bulk");
 async function demo(w){showRunning(w,w==="sc"?"Fetching PBMC 3k…":"Loading GSE96870…");try{const r=await fetch("/api/demo/"+w,{method:"POST"});const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError(e.message)}}
 $("#newBtn").onclick=$("#homeLink").onclick=e=>{e.preventDefault();go("home")};
 
-function go(view){for(const v of["home","running","results"])$("#"+v).hidden=v!==view;$("#navWrap").hidden=$("#dlWrap").hidden=view!=="results";if(view==="home"){history.replaceState(null,"","#");renderRecent();window.__heroRestart()}window.scrollTo(0,0)}
+function go(view){for(const v of["home","running","results","workflow"])$("#"+v).hidden=v!==view;$("#navWrap").hidden=$("#dlWrap").hidden=view!=="results";if(view==="home"){history.replaceState(null,"","#");renderRecent();window.__heroRestart()}window.scrollTo(0,0)}
 /* Past analyses come from the server, not this browser's storage: a run started from another browser,
    by the assistant, or as a re-run you never opened is still yours and must be reachable. */
 let RECENT_ALL = false;
@@ -861,6 +880,249 @@ function explorerCard(it,job){const c=el("article","card wide");
   const tip=$("#tip");if(b<0){tip.hidden=true;return}let t=E.clusters[E.cluster[b]];if(mode!=="cluster"&&cats)t+=" · "+cats.levels[cats.codes[b]];if(!cats&&vals)t+=" · "+(+vals[b]).toFixed(2);t+=` · ${E.numeric.n_genes_by_counts[b]|0} genes`;tip.textContent=t;tip.hidden=false;tip.style.left=Math.min(e.clientX+12,innerWidth-tip.offsetWidth-8)+"px";tip.style.top=e.clientY+14+"px"});
  cv.addEventListener("pointerleave",()=>$("#tip").hidden=true);
  c.querySelector("[data-z=reset]").onclick=()=>{view={s:1,x:0,y:0};path=null;draw()};return c}
+
+/* ------------------------------------------------------------------ How it works
+   What each step of the pipeline does and why, with a schematic of the idea. The illustrations are
+   deliberately diagrams, not miniature versions of the real figures: they show the reasoning, and the
+   real figure for your own data is a click away in the report. */
+const IL = {
+ stack:`<rect x="6" y="10" width="26" height="34" rx="2" fill="none" stroke="var(--muted)"/>
+  <rect x="11" y="16" width="26" height="34" rx="2" fill="none" stroke="var(--muted)"/>
+  <rect x="16" y="22" width="26" height="34" rx="2" fill="var(--panel2)" stroke="var(--accent)"/>
+  <g fill="var(--accent)" opacity=".75">${[0,1,2,3].map(r=>[0,1,2,3].map(c=>
+    `<rect x="${20+c*5.5}" y="${26+r*7}" width="3.4" height="3.4" rx=".7"/>`).join("")).join("")}</g>
+  <path d="M50 38h14m0 0-4-4m4 4-4 4" stroke="var(--ink2)" fill="none" stroke-linecap="round"/>
+  <rect x="70" y="14" width="42" height="48" rx="3" fill="var(--panel2)" stroke="var(--ink2)"/>
+  <g fill="var(--accent)">${[0,1,2,3,4].map(r=>[0,1,2,3,4].map(c=>
+    `<rect x="${75+c*6.5}" y="${19+r*8}" width="4" height="4" rx="1" opacity="${0.25+0.15*((r+c)%5)}"/>`).join("")).join("")}</g>`,
+
+ qc:`<path d="M30 8c9 0 13 9 13 22s-4 30-13 30-13-17-13-30S21 8 30 8z" fill="var(--accent)" opacity=".2"/>
+  <path d="M30 8c9 0 13 9 13 22s-4 30-13 30-13-17-13-30S21 8 30 8z" fill="none" stroke="var(--accent)"/>
+  <g fill="var(--accent)">${[[27,20],[32,26],[29,33],[33,39],[26,44],[31,48],[28,28],[33,32]].map(([x,y])=>
+    `<circle cx="${x}" cy="${y}" r="1.5"/>`).join("")}</g>
+  <g fill="var(--up)">${[[29,63],[32,66],[27,12]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="1.8"/>`).join("")}</g>
+  <path d="M8 58h44M8 15h44" stroke="var(--up)" stroke-dasharray="3 3" opacity=".8"/>
+  <text x="56" y="18" font-size="8" fill="var(--muted)">too few genes</text>
+  <text x="56" y="62" font-size="8" fill="var(--muted)">dying / debris</text>`,
+
+ doublet:`<circle cx="30" cy="34" r="20" fill="none" stroke="var(--muted)" stroke-dasharray="3 3"/>
+  <circle cx="24" cy="31" r="10" fill="var(--accent)" opacity=".55"/>
+  <circle cx="36" cy="38" r="10" fill="var(--warn)" opacity=".55"/>
+  <text x="6" y="72" font-size="7.5" fill="var(--up)">one barcode, two cells</text>
+  <path d="M56 34h12m0 0-4-4m4 4-4 4" stroke="var(--ink2)" fill="none" stroke-linecap="round"/>
+  <circle cx="92" cy="34" r="20" fill="none" stroke="var(--muted)" stroke-dasharray="3 3"/>
+  <path d="M84 26l16 16M100 26l-16 16" stroke="var(--up)" stroke-linecap="round" stroke-width="2"/>`,
+
+ norm:`${[[10,20],[22,40],[34,12],[46,30]].map(([x,h])=>
+    `<rect x="${x}" y="${56-h}" width="9" height="${h}" rx="1.5" fill="var(--muted)" opacity=".7"/>`).join("")}
+  <text x="6" y="72" font-size="7.5" fill="var(--muted)">depth differs</text>
+  <path d="M60 34h12m0 0-4-4m4 4-4 4" stroke="var(--ink2)" fill="none" stroke-linecap="round"/>
+  ${[[74,28],[84,28],[94,28],[104,28]].map(([x,h])=>
+    `<rect x="${x}" y="${56-h}" width="9" height="${h}" rx="1.5" fill="var(--accent)" opacity=".85"/>`).join("")}
+  <text x="78" y="72" font-size="7.5" fill="var(--muted)">comparable</text>`,
+
+ hvg:`<path d="M10 58h100M10 58V8" stroke="var(--muted)" opacity=".6"/>
+  <g fill="var(--muted)" opacity=".5">${[[22,50],[30,47],[38,49],[46,45],[54,47],[62,44],[70,46],[78,43],[86,45],[94,42],[34,44],[58,50],[74,49]].map(([x,y])=>
+    `<circle cx="${x}" cy="${y}" r="2"/>`).join("")}</g>
+  <g fill="var(--accent)">${[[28,22],[44,17],[60,26],[76,14],[90,24],[52,12]].map(([x,y])=>
+    `<circle cx="${x}" cy="${y}" r="2.6"/>`).join("")}</g>
+  <path d="M14 34h96" stroke="var(--accent)" stroke-dasharray="4 3"/>
+  <text x="16" y="30" font-size="8" fill="var(--accent)">kept: variable</text>
+  <text x="14" y="16" font-size="8" fill="var(--muted)">variance</text>`,
+
+ pca:`<g fill="var(--muted)" opacity=".65">${[[30,44],[38,38],[46,34],[54,28],[62,24],[34,48],[42,42],[50,30],[58,30],[66,20],[44,46],[56,36],[68,28],[38,30],[50,40]].map(([x,y])=>
+    `<circle cx="${x}" cy="${y}" r="2.2"/>`).join("")}</g>
+  <path d="M26 50L72 18" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+  <path d="M40 22l18 26" stroke="var(--warn)" stroke-width="1.6" stroke-linecap="round"/>
+  <text x="74" y="18" font-size="8.5" fill="var(--accent)">PC1</text>
+  <text x="60" y="54" font-size="8.5" fill="var(--warn)">PC2</text>`,
+
+ harmony:`<g>${[[16,20],[24,30],[20,42],[30,22],[26,52]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3" fill="var(--accent)"/>`).join("")}
+  ${[[44,24],[52,34],[46,46],[56,20],[50,54]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3" fill="var(--warn)"/>`).join("")}</g>
+  <text x="6" y="72" font-size="7.5" fill="var(--muted)">two runs, apart</text>
+  <path d="M66 36h12m0 0-4-4m4 4-4 4" stroke="var(--ink2)" fill="none" stroke-linecap="round"/>
+  <g>${[[92,24],[104,30],[96,44],[108,40],[100,52]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3" fill="var(--accent)"/>`).join("")}
+  ${[[98,28],[108,24],[92,38],[102,46],[110,50]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3" fill="var(--warn)"/>`).join("")}</g>
+  <text x="74" y="72" font-size="7.5" fill="var(--muted)">merged</text>`,
+
+ umap:`<g stroke="var(--muted)" opacity=".45">${[[20,20,32,26],[32,26,26,38],[26,38,20,20],[74,24,86,30],[86,30,80,42],[80,42,74,24],[32,26,74,24]].map(([a,b,c,d])=>
+    `<path d="M${a} ${b}L${c} ${d}"/>`).join("")}</g>
+  <g fill="var(--accent)">${[[20,20],[32,26],[26,38],[16,30],[30,40]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3.2"/>`).join("")}</g>
+  <g fill="var(--warn)">${[[74,24],[86,30],[80,42],[90,22],[84,50]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3.2"/>`).join("")}</g>
+  <text x="6" y="70" font-size="7.5" fill="var(--muted)">neighbour graph, laid out flat</text>`,
+
+ leiden:`${[["var(--accent)",[[22,20],[30,24],[18,28],[28,32],[36,22]]],["var(--warn)",[[62,18],[70,24],[58,28],[68,34]]],
+    ["var(--up)",[[40,48],[50,52],[44,56],[54,44]]],["var(--info)",[[86,40],[94,46],[88,52],[98,36]]]].map(([c,pts])=>
+    `<g fill="${c}">${pts.map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3.4"/>`).join("")}</g>`).join("")}
+  <text x="6" y="72" font-size="7.5" fill="var(--muted)">cells that look alike, grouped</text>`,
+
+ markers:`<g>${[0,1,2].map(r=>[0,1,2,3].map(c=>{const s=[[5,2.5,4],[2,5,3],[3,2,5.5],[4,3.5,2]][c][r];
+    return `<circle cx="${34+c*20}" cy="${18+r*16}" r="${s}" fill="var(--accent)" opacity="${0.35+s/12}"/>`}).join("")).join("")}
+  ${[0,1,2].map(r=>`<text x="6" y="${21+r*16}" font-size="8" fill="var(--muted)">gene ${r+1}</text>`).join("")}
+  <text x="6" y="72" font-size="7.5" fill="var(--muted)">size = % cells · colour = level</text>`,
+
+ label:`${[["var(--accent)","T cell",[[20,18],[28,22],[16,26]]],["var(--warn)","Monocyte",[[70,20],[78,26],[66,28]]],
+    ["var(--up)","B cell",[[34,48],[44,52],[38,56]]]].map(([c,t,pts])=>
+    `<g fill="${c}">${pts.map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3.4"/>`).join("")}</g>
+     <text x="${pts[0][0]-4}" y="${pts[0][1]-7}" font-size="8" fill="${c}">${t}</text>`).join("")}
+  <text x="6" y="72" font-size="7.5" fill="var(--muted)">matched to marker panels</text>`,
+
+ pseudobulk:`<g fill="var(--accent)" opacity=".8">${Array.from({length:18},(_,i)=>
+    `<circle cx="${10+(i%6)*6}" cy="${16+Math.floor(i/6)*9}" r="2.2"/>`).join("")}</g>
+  <text x="6" y="60" font-size="7.5" fill="var(--muted)">cells of one sample</text>
+  <path d="M50 30h10m0 0-4-4m4 4-4 4" stroke="var(--ink2)" fill="none" stroke-linecap="round"/>
+  ${[[66,26],[76,34],[86,20]].map(([x,h])=>`<rect x="${x}" y="${44-h}" width="8" height="${h}" rx="1.5" fill="var(--accent)"/>`).join("")}
+  ${[[98,30],[108,22]].map(([x,h])=>`<rect x="${x}" y="${44-h}" width="8" height="${h}" rx="1.5" fill="var(--warn)"/>`).join("")}
+  <text x="6" y="72" font-size="7.5" fill="var(--muted)">summed per sample → DESeq2</text>`,
+ counts:`<rect x="6" y="10" width="46" height="50" rx="3" fill="var(--panel2)" stroke="var(--ink2)"/>
+  <g fill="var(--accent)">${[0,1,2,3,4].map(r=>[0,1,2].map(c=>
+    `<rect x="${12+c*13}" y="${16+r*9}" width="9" height="5" rx="1" opacity="${0.3+0.14*((r*c+r)%5)}"/>`).join("")).join("")}</g>
+  <text x="6" y="72" font-size="7.5" fill="var(--muted)">genes × samples</text>
+  <rect x="66" y="10" width="46" height="24" rx="3" fill="var(--panel2)" stroke="var(--accent)"/>
+  ${[0,1,2].map(r=>`<text x="70" y="${20+r*7}" font-size="5.6" fill="var(--muted)">sample · condition</text>`).join("")}
+  <text x="66" y="46" font-size="7.5" fill="var(--muted)">what to</text>
+  <text x="66" y="56" font-size="7.5" fill="var(--muted)">compare</text>`,
+
+ filter:`<g>${[[10,34],[20,28],[30,40],[40,22],[50,36]].map(([x,h])=>
+    `<rect x="${x}" y="${52-h}" width="7" height="${h}" rx="1.5" fill="var(--accent)" opacity=".85"/>`).join("")}
+  ${[[60,3],[70,2],[80,4],[90,2]].map(([x,h])=>
+    `<rect x="${x}" y="${52-h}" width="7" height="${h}" rx="1" fill="var(--up)"/>`).join("")}</g>
+  <path d="M56 12v44" stroke="var(--up)" stroke-dasharray="3 3"/>
+  <text x="6" y="70" font-size="7.5" fill="var(--muted)">kept</text>
+  <text x="34" y="70" font-size="7.5" fill="var(--up)">too few reads to test</text>`,
+
+ sizefactor:`${[[12,44],[24,20],[36,32]].map(([x,h])=>
+    `<rect x="${x}" y="${50-h}" width="9" height="${h}" rx="1.5" fill="var(--muted)" opacity=".7"/>`).join("")}
+  <text x="6" y="62" font-size="7.5" fill="var(--muted)">sizes differ</text>
+  <path d="M54 30h12m0 0-4-4m4 4-4 4" stroke="var(--ink2)" fill="none" stroke-linecap="round"/>
+  ${[[76,32],[88,32],[100,32]].map(([x,h])=>
+    `<rect x="${x}" y="${50-h}" width="9" height="${h}" rx="1.5" fill="var(--accent)"/>`).join("")}
+  <text x="54" y="62" font-size="7.5" fill="var(--muted)">median-of-ratios</text>`,
+
+ dispersion:`<path d="M12 56h96M12 56V10" stroke="var(--muted)" opacity=".6"/>
+  <g fill="var(--muted)" opacity=".55">${[[24,26],[32,38],[40,30],[50,42],[58,36],[68,44],[78,40],[88,46],[96,42],[36,20],[62,28],[84,34]].map(([x,y])=>
+    `<circle cx="${x}" cy="${y}" r="2"/>`).join("")}</g>
+  <path d="M18 22C40 44 70 48 104 48" fill="none" stroke="var(--accent)" stroke-width="1.8"/>
+  <text x="16" y="16" font-size="7.5" fill="var(--accent)">trend borrows strength</text>
+  <text x="6" y="70" font-size="7.5" fill="var(--muted)">mean expression →</text>`,
+
+ glm:`<path d="M10 56h44M10 56V10" stroke="var(--muted)" opacity=".6"/>
+  <g fill="var(--accent)">${[[20,40],[26,34],[22,46]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="2.6"/>`).join("")}</g>
+  <g fill="var(--warn)">${[[40,22],[46,16],[42,28]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="2.6"/>`).join("")}</g>
+  <path d="M18 42h12M38 22h12" stroke="var(--ink2)" stroke-width="1.6" stroke-linecap="round"/>
+  <text x="12" y="70" font-size="7.5" fill="var(--muted)">control</text>
+  <text x="34" y="70" font-size="7.5" fill="var(--muted)">treated</text>
+  <path d="M60 34h10m0 0-4-4m4 4-4 4" stroke="var(--ink2)" fill="none" stroke-linecap="round"/>
+  <text x="76" y="28" font-size="9" fill="var(--ink2)">log2FC</text>
+  <text x="76" y="42" font-size="9" fill="var(--ink2)">p-value</text>`,
+
+ shrink:`<path d="M12 34h96" stroke="var(--muted)" opacity=".6"/>
+  <g fill="var(--up)" opacity=".5">${[[24,12],[34,54],[44,14],[54,52]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3"/>`).join("")}</g>
+  <g stroke="var(--ink2)" opacity=".7">${[[24,14,24,28],[34,52,34,40],[44,16,44,29],[54,50,54,39]].map(([a,b,c,d])=>
+    `<path d="M${a} ${b}L${c} ${d}" stroke-dasharray="2 2"/>`).join("")}</g>
+  <g fill="var(--accent)">${[[24,30],[34,38],[44,31],[54,37]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3"/>`).join("")}</g>
+  <g fill="var(--accent)">${[[80,16],[92,50],[104,20]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3"/>`).join("")}</g>
+  <text x="6" y="70" font-size="7.5" fill="var(--muted)">uncertain: pulled in</text>
+  <text x="72" y="70" font-size="7.5" fill="var(--muted)">solid: kept</text>`,
+
+ fdr:`<path d="M12 56h96M12 56V10" stroke="var(--muted)" opacity=".6"/>
+  ${Array.from({length:10},(_,i)=>`<rect x="${16+i*9.5}" y="${i<2?18:44}" width="7" height="${i<2?38:12}" rx="1"
+    fill="${i<2?'var(--accent)':'var(--muted)'}" opacity="${i<2?.9:.55}"/>`).join("")}
+  <text x="14" y="14" font-size="7.5" fill="var(--accent)">real signal</text>
+  <text x="56" y="38" font-size="7.5" fill="var(--muted)">flat = noise</text>
+  <text x="6" y="70" font-size="7.5" fill="var(--muted)">p-value →</text>`,
+
+ enrich:`${["Interferon response","Cell cycle","Oxidative phosph."].map((t,i)=>
+   `<rect x="10" y="${12+i*16}" width="${[86,58,34][i]}" height="10" rx="2" fill="var(--accent)" opacity="${.85-i*.2}"/>
+    <text x="13" y="${20+i*16}" font-size="7" fill="var(--accent-ink)">${t}</text>`).join("")}
+  <text x="6" y="72" font-size="7.5" fill="var(--muted)">sets your changed genes fall into</text>`,
+};
+
+const FLOWS = {
+ sc:{label:"Single-cell",lede:"Each row of the matrix is one cell, so the first job is deciding which barcodes are cells at all — and the last is remembering that cells from one animal are not independent of each other.",
+  steps:[
+  {il:"stack",t:"Read and stack the data",
+   w:"Every file you gave is read — 10x triplets, .h5, .h5ad, loom or a plain matrix — and stacked into one object, with each cell tagged by the file it came from.",
+   y:"That tag becomes the sample, and it is what later steps use to correct for batch and to group cells into replicates."},
+  {il:"qc",t:"Quality control",
+   w:"Each barcode is scored on how many genes it detects, how many transcripts in total, and what fraction is mitochondrial. Cut-offs are set from your own data at median ± 5 MAD, not from fixed numbers.",
+   y:"A droplet with very few genes is usually empty; one with far too many is usually two cells; a high mitochondrial fraction means the cell lysed and lost its cytoplasm. Fixed thresholds suit one experiment and quietly ruin the next."},
+  {il:"doublet",t:"Remove doublets",
+   w:"Scrublet builds artificial doublets by adding pairs of your own cells together, then flags real barcodes that resemble them.",
+   y:"A doublet looks like a cell type that expresses two programmes at once, and is routinely mistaken for a new population. Skipped automatically for plate-based data, where the model does not apply."},
+  {il:"norm",t:"Normalize and log-transform",
+   w:"Counts are rescaled so every cell totals 10,000, then log-transformed.",
+   y:"One cell may be sequenced twice as deeply as its neighbour for purely technical reasons. Without this, depth would dominate every comparison. The log stops a handful of very high genes from swamping everything else."},
+  {il:"hvg",t:"Pick the genes that vary",
+   w:"About 2,000 genes with more variance than their expression level predicts are kept for the structural steps.",
+   y:"Most genes are either off or steady everywhere and carry no information about which cell is which — they only add noise and cost. The full matrix is still used for expression and markers."},
+  {il:"pca",t:"Principal components",
+   w:"The variable genes are reduced to a few dozen components, each a weighted combination of genes that vary together. The number kept comes from where the scree curve elbows.",
+   y:"Genes move in groups, so a few dozen components capture the biology and discard most of the noise. Everything downstream sees these, not the raw genes."},
+  {il:"harmony",t:"Correct for batch",
+   w:"When cells came from several runs, Harmony nudges the components so the same cell type from different runs overlaps.",
+   y:"Otherwise the strongest signal in the data is which run a cell came from, and you get one cluster per sample instead of one per cell type."},
+  {il:"umap",t:"Neighbour graph and UMAP",
+   w:"Each cell is joined to its 15 nearest neighbours, and that graph is laid out flat for the map you look at.",
+   y:"The graph is what clustering actually uses. The UMAP is a picture of it: neighbourhoods are meaningful, but the distance between two far-apart clusters is not."},
+  {il:"leiden",t:"Cluster",
+   w:"The Leiden algorithm cuts the graph into groups of cells that are more connected to each other than to the rest. The resolution sets how finely.",
+   y:"This is the one genuinely subjective choice in the analysis: there is no correct number of clusters, only the granularity your question needs. That is why the resolution sweep and the silhouette figure are in the report."},
+  {il:"markers",t:"Find marker genes",
+   w:"Every cluster is compared with all other cells by a Wilcoxon rank test, gene by gene.",
+   y:"It tells you what each cluster is made of. Treat the ranking, not the p-value: the clusters were defined from the same data, so the p-values are optimistic by construction."},
+  {il:"label",t:"Name the populations",
+   w:"Cluster averages are matched against curated marker panels, and CellTypist labels each cell independently when it is available.",
+   y:"Two opinions, arrived at differently. Where they agree you can move on; where they disagree the cluster is worth a look. Both are hypotheses, not identifications."},
+  {il:"pseudobulk",t:"Compare conditions the honest way",
+   w:"To compare conditions, counts are summed per sample first and the samples go into DESeq2 — the same test used for bulk — for all cells and again within each cell type.",
+   y:"Cells from one animal are not independent replicates. Testing them as if they were inflates significance by orders of magnitude and produces gene lists that do not reproduce. Your replicates are your samples."},
+ ]},
+ bulk:{label:"Bulk",lede:"Every sample is one column of counts, so almost everything rests on the design: which samples are being compared, and what else differs between them.",
+  steps:[
+  {il:"counts",t:"Read counts and metadata",
+   w:"The count matrix is read, gene IDs are converted to symbols when they are Ensembl or RefSeq accessions, and sample annotations are taken from your metadata file or from every GEO series matrix in the upload.",
+   y:"The metadata decides what gets compared. Unmapped gene IDs are worse than they look: every gene-set and pathway step silently finds nothing."},
+  {il:"filter",t:"Drop genes with too little signal",
+   w:"A gene is kept if it reaches at least 10 counts in as many samples as the smallest group has.",
+   y:"A gene seen a handful of times cannot support a test, and every one you keep makes the multiple-testing correction harsher for the genes that can."},
+  {il:"sizefactor",t:"Size factors",
+   w:"Each sample gets a scaling factor from the median ratio of its counts to a reference across all genes.",
+   y:"Sequencing depth varies between libraries. Unlike scaling by total counts, the median-of-ratios estimate is not thrown off by a few very highly expressed genes."},
+  {il:"dispersion",t:"Estimate variability",
+   w:"How much a gene varies between replicates is estimated per gene, then shrunk toward a trend fitted across all genes.",
+   y:"With three or four replicates a per-gene variance estimate is hopeless on its own. Borrowing the trend from thousands of genes at similar expression is what makes small experiments testable at all."},
+  {il:"glm",t:"Fit the model and test",
+   w:"A negative-binomial model is fitted per gene with your design — the factor being tested plus any covariates — and the contrast is tested with a Wald test.",
+   y:"Counts are not normally distributed, and covariates let you hold sex, batch or age constant. A covariate that tracks the condition cannot be adjusted for, which is why the app refuses those designs instead of fitting them."},
+  {il:"shrink",t:"Shrink fold changes",
+   w:"Fold changes are pulled toward zero in proportion to how uncertain they are.",
+   y:"A gene with three counts in one group and none in the other shows an enormous fold change on almost no evidence. Shrinkage leaves well-measured genes alone and makes the ranking trustworthy."},
+  {il:"fdr",t:"Correct for multiple testing",
+   w:"Tens of thousands of tests are corrected with Benjamini–Hochberg, and DESeq2 leaves out genes with no power to be significant.",
+   y:"At p < 0.05 across 20,000 genes you expect 1,000 false positives from noise alone. The adjusted p-value is the one to quote."},
+  {il:"enrich",t:"Ask what the changes mean",
+   w:"The ranked gene list goes to GSEA, the significant lists to over-representation, and the whole contrast to PROGENy and CollecTRI for pathway and transcription-factor activity.",
+   y:"A list of 400 genes is not a result. GSEA uses the whole ranking rather than a cut-off, so a coordinated set of small changes still shows up — and footprint methods read what a pathway did, not whether its own members changed."},
+ ]}};
+
+function renderWorkflow(kind){
+ const root=$("#workflow"),f=FLOWS[kind];
+ root.innerHTML=`<div class="top"><span class="badge">how it works</span><h1>${f.label} workflow</h1>
+   <div class="seg" id="flowSeg">${Object.entries(FLOWS).map(([k,v])=>
+     `<button data-k="${k}" class="${k===kind?"on":""}">${v.label}</button>`).join("")}</div></div>
+  <p class="lede flowlede">${esc(f.lede)}</p>
+  <ol class="flow">${f.steps.map((s,i)=>`<li>
+    <div class="n">${i+1}</div>
+    <div class="ill"><svg viewBox="0 0 120 76" role="img" aria-label="${esc(s.t)}">${IL[s.il]||""}</svg></div>
+    <div class="txt"><h3>${esc(s.t)}</h3><p class="what">${esc(s.w)}</p><p class="why">${esc(s.y)}</p></div>
+   </li>`).join("")}</ol>
+  <p class="hint flowfoot">Every step above writes its own figure into the report, with the same explanation applied to your
+   own numbers. The exact parameters each run used are in that report's Parameters section, and the generated script
+   reproduces the whole thing in plain Scanpy and PyDESeq2.</p>`;
+ $$("#flowSeg button").forEach(b=>b.onclick=()=>renderWorkflow(b.dataset.k));
+}
+$("#flowBtn").onclick=e=>{e.preventDefault();renderWorkflow(S.result?.kind==="bulk"?"bulk":"sc");go("workflow")};
 
 /* parameters panel — every choice, the reason for it, and one Re-analyze button */
 const TAGTXT={auto:"auto",user:"you set",default:"default",data:"from data",fixed:"fixed"};
