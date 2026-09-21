@@ -23,6 +23,7 @@ CANVAS = 1024
 INSET, BOX = 100, 824       # Apple leaves a margin around the rounded square
 PANEL = "#0d1b22"           # --ink in the light theme: reads on both a light and a dark dock
 AXES = "#6a7b84"            # --muted
+TICKS = "#55646c"           # a shade back from the axes, as the SVG dims them with opacity
 
 # (cx, cy, r, colour) in the SVG's 32-unit space
 CLUSTERS = [
@@ -42,12 +43,17 @@ def draw(size: int) -> Image.Image:
     d = ImageDraw.Draw(im)
     d.rounded_rectangle([to(0.5), to(0.5), to(31.5), to(31.5)], radius=7.5 * k, fill=PANEL)
 
-    w = max(1, int(1.05 * k))
-    cap = w / 2
-    for (x0, y0, x1, y1) in [(7, 4.6, 7, 25.4), (6.6, 25, 27.4, 25)]:
-        d.line([to(x0), to(y0), to(x1), to(y1)], fill=AXES, width=w)
-        for (cx, cy) in ((x0, y0), (x1, y1)):      # round the ends, as stroke-linecap does
-            d.ellipse([to(cx) - cap, to(cy) - cap, to(cx) + cap, to(cy) + cap], fill=AXES)
+    def stroke(segs, units, fill):
+        w = max(1, int(units * k))
+        cap = w / 2
+        for (x0, y0, x1, y1) in segs:
+            d.line([to(x0), to(y0), to(x1), to(y1)], fill=fill, width=w)
+            for (cx, cy) in ((x0, y0), (x1, y1)):   # round the ends, as stroke-linecap does
+                d.ellipse([to(cx) - cap, to(cy) - cap, to(cx) + cap, to(cy) + cap], fill=fill)
+
+    stroke([(7, 4.6, 7, 25.4), (6.6, 25, 27.4, 25)], 1.05, AXES)
+    stroke([(7, 10, 5.5, 10), (7, 15.2, 5.5, 15.2), (7, 20.4, 5.5, 20.4),
+            (12.2, 25, 12.2, 26.5), (17.4, 25, 17.4, 26.5), (22.6, 25, 22.6, 26.5)], 0.9, TICKS)
 
     for cx, cy, r, col in CLUSTERS:
         d.ellipse([to(cx - r), to(cy - r), to(cx + r), to(cy + r)], fill=col)
