@@ -1,5 +1,10 @@
 # RNAseq Bench changelog
 
+## 3.3.5
+- The mark is now a **UMAP panel**: a rounded plot area with x and y axes and the populations sitting
+  inside them, rather than a disc. Axes are drawn in the muted token so they hold against the panel fill
+  in both light and dark themes.
+
 ## 3.3.4
 - *created by Paul H. Kim, Ph.D.* is set in italic, in the sidebar and under the hero title.
 
