@@ -116,8 +116,13 @@ def annotate_clusters(adata, cluster_key="leiden", layer="log1p"):
             margin = r - (max(other) if other else -1.0)
             # 0.90 with a clear margin: on real data, clusters of one type sit at 0.91-1.00 with each
             # other while genuinely different types top out below 0.80
-            if r >= 0.90 and margin >= 0.05:
-                lbl = base[best_c]
+            # Profile similarity alone lets one label spread across a whole neighbourhood of clusters:
+            # on a finely divided epithelium it produced eight clusters all called "Proliferating".
+            # Require some direct marker support for that same panel too, so similarity can only
+            # confirm a weak call, never manufacture one.
+            lbl = base[best_c]
+            own = float(S.loc[c, lbl]) if lbl in S.columns else -1.0
+            if r >= 0.90 and margin >= 0.05 and own >= 0.3 and S.loc[c].idxmax() == lbl:
                 used[lbl] = used.get(lbl, 0) + 1
                 out[c] = (lbl, out[c][1], out[best_c][2])
                 by_similarity.append(c)
@@ -443,21 +448,55 @@ def run(job: Job, files: list[Path], params: dict):
                how="Genes with the largest positive (red) and negative (blue) loadings define each axis — often a PC contrasts two lineages. A PC driven by mitochondrial or ribosomal genes points to technical variation.",
                yours="PC1 separates <b>" + ", ".join(loadings["PC1"].sort_values().index[-3:]) + "</b> from <b>" + ", ".join(loadings["PC1"].sort_values().index[:3]) + "</b>.")
 
-    # integration
-    use_rep = "X_pca"
-    integrated = False
-    if batch_key and nb > 1 and P["integrate"]:
+    # ---------------------------------------------------------------- integration
+    # Measure how separated the batches are first, say which method that calls for, and use it unless
+    # the user asked for something specific. Guessing is the thing to avoid: the same default is wrong
+    # for a clean two-sample experiment and for fifteen libraries of uneven depth.
+    from . import integration as _int
+    use_rep, integrated, method = "X_pca", False, "none"
+    diag, why = {"n_batches": nb}, ""
+    if batch_key and nb > 1:
+        diag = _int.assess(adata, batch_key, n_pcs)
         try:
-            import harmonypy  # noqa: F401
-            job.step(50, f"Integrating {nb} batches with Harmony")
-            import logging
-            logging.getLogger("harmonypy").setLevel(logging.WARNING)
-            ho = harmonypy.run_harmony(adata.obsm["X_pca"], adata.obs, [batch_key], max_iter_harmony=20, random_state=0)
-            Z = np.asarray(ho.Z_corr)
-            adata.obsm["X_pca_harmony"] = Z if Z.shape[0] == adata.n_obs else Z.T
-            use_rep = "X_pca_harmony"; integrated = True
-        except Exception as e:  # noqa: BLE001
-            notes.append(f"WARN:Harmony integration unavailable ({type(e).__name__}); clusters may reflect batch.")
+            import scvi  # noqa: F401
+            have_scvi = True
+        except Exception:  # noqa: BLE001
+            have_scvi = False
+        rec, why = _int.recommend(diag, adata.n_obs, have_scvi)
+        want = P["integrate"]
+        if want is False or str(want).lower() in ("false", "none", "off"):
+            method = "none"
+            why = "Turned off, so any structure that follows the batches is left in place."
+        elif want in (True, None, "auto") or str(want).lower() == "auto":
+            method = rec
+        else:
+            method = str(want).lower()
+            why = f"You asked for {method}. " + why
+        if method == "scvi" and not have_scvi:
+            method = "harmony"
+            why += " scvi-tools is not installed, so Harmony was used instead."
+
+        if method == "scvi":
+            try:
+                job.step(50, f"Integrating {nb} batches with scVI (training, this takes a few minutes)")
+                adata.obsm["X_scvi"] = _int.run_scvi(adata, batch_key)
+                use_rep, integrated = "X_scvi", True
+            except Exception as e:  # noqa: BLE001
+                notes.append(f"WARN:scVI integration failed ({type(e).__name__}: {log_exc('scvi')}); falling back to Harmony.")
+                method = "harmony"
+        if method == "harmony":
+            try:
+                import harmonypy  # noqa: F401
+                job.step(50, f"Integrating {nb} batches with Harmony")
+                import logging
+                logging.getLogger("harmonypy").setLevel(logging.WARNING)
+                ho = harmonypy.run_harmony(adata.obsm["X_pca"], adata.obs, [batch_key], max_iter_harmony=20, random_state=0)
+                Z = np.asarray(ho.Z_corr)
+                adata.obsm["X_pca_harmony"] = Z if Z.shape[0] == adata.n_obs else Z.T
+                use_rep, integrated = "X_pca_harmony", True
+            except Exception as e:  # noqa: BLE001
+                notes.append(f"WARN:Harmony integration unavailable ({type(e).__name__}); clusters may reflect batch.")
+                method = "none"
 
     # ---------------------------------------------------------------- neighbors / umap / leiden
     job.step(55, "Building neighbour graph and UMAP")
@@ -514,7 +553,11 @@ def run(job: Job, files: list[Path], params: dict):
     if unl:
         job.flag("warn", f"Clusters {', '.join(unl)} had no confident label — possibly a cell type outside the panel, residual doublets or stressed cells. Check their markers below.")
     if integrated:
-        job.flag("info", f"{nb} batches (<b>{batch_key}</b>) were integrated with Harmony before clustering.")
+        job.flag("info", f"{nb} batches (<b>{batch_key}</b>) were integrated with "
+                         f"<b>{'scVI' if method == 'scvi' else 'Harmony'}</b> before clustering. " + why)
+    elif batch_key and nb > 1:
+        job.flag("warn" if diag.get("excess", 0) >= 0.45 else "info",
+                 f"{nb} batches (<b>{batch_key}</b>) were not integrated. " + why)
 
     # Dissociation stress. Reported per cluster rather than per cell: a handful of stressed cells changes
     # nothing, but a whole cluster of them is an artefact of how the tissue was handled and will otherwise
@@ -836,11 +879,12 @@ def run(job: Job, files: list[Path], params: dict):
             "n_doublets": n_doublets, "plate_based": plate_based,
             "n_hvg": n_hvg, "hvg_method": hvg_method, "n_pcs": n_pcs, "n_comps": n_comps,
             "knee": knee_pc, "knee_auto": knee_auto, "integrated": integrated,
+            "method": method, "int_why": why, "diag": diag,
             "res": res, "res_grid": res_grid, "K": K, "species": species, "pb": _pb})
         # the effective values, so a re-run reproduces this job and the agent/codegen see what was used
         job.result["params"].update({
             "min_cells": int(P["min_cells"]), "n_pcs": n_pcs, "doublets": bool(P["doublets"]),
-            "integrate": bool(P["integrate"]), "pseudobulk": bool(P["pseudobulk"]),
+            "integrate": bool(P["integrate"]), "integration_method": method, "pseudobulk": bool(P["pseudobulk"]),
             "sample_key": _pb.get("sk") or P["sample_key"] or "", "condition_key": _pb.get("ck") or P["condition_key"] or "",
             "reference": _pb.get("ref") or "", "pb_covariates": P["pb_covariates"] or _pb.get("covariates") or [],
             "genes": P["genes"] or "", "gsea": bool(P["gsea"]), "celltypist": bool(P["celltypist"]),
@@ -864,7 +908,9 @@ def run(job: Job, files: list[Path], params: dict):
                                           "from van den Brink et al. (2017), scored per cell and summarised per cluster.")
     job.method("PCA", f"Scaled to unit variance (clipped at 10); ARPACK PCA with {n_comps} components; {n_pcs} used (elbow + 5).")
     if integrated:
-        job.method("Integration", f"Harmony (harmonypy) on PCA, batch = {batch_key}.")
+        job.method("Integration", (f"scVI (scvi-tools), {adata.obsm['X_scvi'].shape[1]}-dimensional latent space trained on "
+                                   f"raw counts of the variable genes, batch = {batch_key}; used in place of PCA."
+                                   if method == "scvi" else f"Harmony (harmonypy) on PCA, batch = {batch_key}."))
     job.method("Graph & UMAP", "sc.pp.neighbors(n_neighbors=15) + sc.tl.umap (min_dist 0.5).")
     job.method("Clustering", f"Leiden (igraph), resolution {res}; sweep at {', '.join(map(str, res_grid))}.")
     job.method("Markers", "sc.tl.rank_genes_groups(method='wilcoxon') vs rest on log-normalized counts, BH-adjusted.")
@@ -962,12 +1008,21 @@ def _panel(params, P, ctx):
            "No column looked like a batch, so no integration was attempted. If your cells came from several runs, name that "
            "column here — batch effects otherwise show up as clusters."),
           type="select", source=src(params, "batch_key", auto=bool(batch_key)), options=[""] + obs),
-        F("integrate", "Correct batch effects (Harmony)", bool(P["integrate"]),
-          ("Harmony ran on the PCA and the corrected embedding was used for the graph, UMAP and clusters — so clusters "
-           "reflect cell type rather than which run a cell came from." if ctx["integrated"] else
-           f"Not applied: {'no batch column' if not batch_key else 'only one batch level'}." if nb <= 1 or not batch_key else
-           "Turned off — clusters may partly reflect batch."),
-          type="bool", source=src(params, "integrate")),
+        F("integrate", "Batch correction", {"scvi": "scvi", "harmony": "harmony", "none": "off"}.get(ctx["method"], "auto"),
+          (f"{'Measured on your data before choosing: ' if src(params, 'integrate') != 'user' else ''}{ctx['int_why']}"
+           if nb > 1 and batch_key else
+           f"Not applicable: {'no batch column was found' if not batch_key else 'there is only one batch'}.") +
+          (" Auto measures how separated your batches are and picks accordingly; Harmony corrects the principal "
+           "components in seconds; scVI trains a model of the counts with batch and library size as terms, which "
+           "takes minutes but handles uneven depth far better; off leaves the batches alone."),
+          type="select", source=src(params, "integrate", auto=True), options=["auto", "harmony", "scvi", "off"]),
+        F("_intdiag", "Batch separation measured", (
+            f"{100*ctx['diag'].get('excess', 0):.0f}% excess own-batch neighbours · "
+            f"{ctx['diag'].get('depth_ratio', 1):.1f}× depth spread across {nb} batches" if nb > 1 and batch_key else "—"),
+          "How much of a cell's neighbourhood is its own batch beyond what batch sizes explain, and how far apart "
+          "the batches are in genes detected per cell. These two numbers are what the automatic choice is made on: "
+          "near zero means correction has little to do, while a large depth spread is the case Harmony is weakest on.",
+          type="fixed", source="auto"),
         F("_graph", "Neighbours / UMAP", "n_neighbors 15, min_dist 0.5",
           "Standard Scanpy settings. UMAP distances between far-apart clusters are not meaningful — read it as a map of "
           "neighbourhoods, not of magnitudes. Fixed.", type="fixed")]))

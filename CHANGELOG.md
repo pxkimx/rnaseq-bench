@@ -1,5 +1,22 @@
 # RNAseq Bench changelog
 
+## 3.5
+- **scVI is available as a second integration method, and the app measures which one your data needs.**
+  Before integrating, it measures two things: how much of a cell's neighbourhood is its own batch beyond
+  what batch sizes explain, and how far apart the batches are in genes detected per cell. Those decide
+  the method, and the reasoning is reported in the run and in the Parameters section. Harmony corrects
+  the principal components in seconds; scVI models the counts with batch and per-cell library size as
+  explicit terms, which costs minutes but is the right tool when batches differ in depth — Harmony moves
+  cells within the components and cannot repair a library sequenced a third as deeply. Choose `auto`,
+  `harmony`, `scvi` or `off`; scvi-tools is in the optional requirements block, and `auto` falls back to
+  Harmony with a note when it is not installed.
+- **When batches barely overlap at all, the run says so instead of quietly merging them.** Near-total
+  separation is what a strong batch effect looks like, and equally what two different tissues or
+  timepoints look like; integrating the second case removes the difference being studied.
+- Fixed: the similarity pass that names clusters could spread one label across a whole neighbourhood of
+  clusters — on a finely divided epithelium it produced eight clusters all called "Proliferating". A
+  cluster now needs direct marker support for that panel as well as a matching profile.
+
 ## 3.4.1
 - **How it works** expands in the sidebar into Single-cell and Bulk, so either pipeline is one click away
   rather than two. Clicking the heading again collapses it and returns you where you were. The in-page

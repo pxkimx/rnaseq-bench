@@ -38,3 +38,4 @@ decoupler>=2.0             # pathway / TF activity (PROGENy, CollecTRI)
 # rest of the stack has moved past. Left here so it installs wherever that resolves; where it does not,
 # the cell-cell communication step reports itself as skipped and nothing else is affected.
 liana>=1.9                 # ligand–receptor analysis
+scvi-tools>=1.1            # scVI batch integration (pulls PyTorch; ~350 MB, optional by design)

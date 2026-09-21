@@ -289,7 +289,24 @@ sc.tl.pca(ad_h, n_comps=50, svd_solver="arpack", random_state=0)
 adata.obsm["X_pca"] = ad_h.obsm["X_pca"]
 rep = "X_pca"
 '''
-    if batch and P.get("integrate", True):
+    method = str((res.get("params") or {}).get("integration_method") or "harmony").lower()
+    if batch and P.get("integrate", True) is not False and method == "scvi":
+        s += f'''
+# ------------------------------------------------------------------ 5. scVI batch integration over "{batch}"
+# scVI models the raw counts with batch and each cell's library size as explicit terms and learns a
+# latent space that replaces PCA, which is why it copes with batches sequenced to different depths
+# where correcting the components after the fact cannot.
+import scvi
+scvi.settings.seed = 0
+sub = adata[:, adata.var["highly_variable"]].copy()
+sub.X = sub.layers["counts"].copy()                      # raw counts, not the log-normalised matrix
+scvi.model.SCVI.setup_anndata(sub, batch_key="{batch}")
+model = scvi.model.SCVI(sub, n_latent=30)
+model.train(early_stopping=True, enable_progress_bar=False)
+adata.obsm["X_scvi"] = model.get_latent_representation()
+rep = "X_scvi"
+'''
+    elif batch and P.get("integrate", True) is not False:
         s += f'''
 # ------------------------------------------------------------------ 5. Harmony batch integration over "{batch}"
 import harmonypy
