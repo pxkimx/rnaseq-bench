@@ -1,5 +1,16 @@
 # RNAseq Bench changelog
 
+## 3.8
+- **New: a browser-only web version** (`source/webapp/`). Three static files, no server, nothing uploaded —
+  QC with adaptive cut-offs, normalisation, variable genes, PCA, exact neighbours, Leiden clustering, UMAP
+  and marker genes, all computed in the tab. Deploys to Cloudflare Pages as-is.
+- What it omits, it omits honestly. scanpy, anndata, PyDESeq2 and harmonypy cannot run in WebAssembly —
+  their dependencies (numcodecs, google-crc32c, numba, torch) have no wasm builds, which was tested in a
+  real browser rather than assumed. So differential expression, batch integration, annotation and gene sets
+  are absent rather than replaced by weaker stand-ins, and the page says which and why. The steps that are
+  there call the same libraries scanpy calls underneath: scikit-learn for PCA and neighbours,
+  igraph.community_leiden for clustering, a vectorised rank-sum for markers.
+
 ## 3.7
 - **One button starts an analysis, not two.** The GEO panel had its own Download & analyze sitting above
   the settings, so that route reached a running analysis without ever passing them — which is how the

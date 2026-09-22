@@ -13,6 +13,14 @@ Owner: Paul (biologist, learning the analyses — explain the *why* in plain lan
 - Every figure goes through `job.figure(id, title, fig, how=, yours=)`; sections via `job.section`. Keep that contract —
   the UI, PDF report and agent all read result.json.
 
+## webapp/ — the browser-only version
+`source/webapp/` is a separate, static app (index.html + app.js + pipeline.py) that runs QC → HVG → PCA →
+neighbours → Leiden → markers inside a browser tab via Pyodide. It shares no code with `server/` on purpose:
+scanpy, anndata, PyDESeq2 and harmonypy cannot run in WebAssembly (numcodecs, google-crc32c, numba, torch
+have no wasm wheels — verified, not assumed), so it calls sklearn/igraph directly and does UMAP in JS.
+Never add an approximation of DESeq2, Harmony or CellTypist there; those steps are absent by design and the
+page says so. Deploys to Cloudflare Pages as static assets.
+
 ## Run / build / test
 - `./dev.sh` — server from source with auto-reload (uses the app's venv). `./build_mac.sh` — refresh `../RNAseq Bench.app` in place + zip.
 - `python -m server.selftest` — 2-minute simulated sc + bulk run. `tests/README.md` — synthetic GEO-style datasets and `tests/run_job.py`.

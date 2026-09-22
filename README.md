@@ -66,6 +66,11 @@ statistics), and hand you the reproducible script. Tool calls are shown in the c
 **View code** — every analysis has a `reproduce_analysis.py` written with plain Scanpy / PyDESeq2 calls
 and the parameters used; the same viewer shows the pipeline source itself.
 
+## Web version
+`source/webapp/` is a browser-only build — QC, clustering and marker genes computed in the tab with nothing
+uploaded, deployable to Cloudflare Pages as three static files. It deliberately omits differential
+expression, integration, annotation and gene sets, which cannot run in WebAssembly. See `webapp/README.md`.
+
 ## Outputs
 Per job in `jobs/<id>/`: `report.pdf`, `figures/*.png` (200 dpi), `deseq2_results.csv` /
 `pseudobulk_*.csv`, `composition_test.csv`, `analyzed.h5ad`, `markers.csv`, `cell_metadata.csv`,
