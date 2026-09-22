@@ -29,6 +29,22 @@ Substituting something weaker and presenting it as the real thing is the one out
 Practical to roughly 20–30k cells; neighbours are exact rather than approximate, which is where the
 time goes.
 
+## What it reports
+
+**QC** — violins of genes, counts and mitochondrial percent with the cut-offs drawn on and removed cells in
+red; counts-vs-genes coloured by mitochondrial percent; the twenty highest-expressed genes, which doubles as
+the ambient-RNA view; and a breakdown of how many cells each cut-off removes. Figures redraw as you change a
+threshold, so you see what a cut-off costs before spending a run on it.
+
+**Feature selection** — mean-variance plot of the variable genes, and a scree plot with the elbow marked.
+
+**Per-cell scores** — cell cycle phase (Tirosh et al. S and G2/M sets) and dissociation stress (van den Brink
+et al. 2017), summarised per cluster. When the gene sets are not in the data, this says *not assessable* and
+reports how many were found, rather than scoring zeros and calling every cell G2/M.
+
+**Clusters and markers** — Leiden clusters, rank-sum markers per cluster with percent expressing inside and
+outside, an interactive UMAP you can colour by cluster, QC metric, stress score or any gene, and CSV export.
+
 ## Run locally
 
     python3 -m http.server 8792     # from this folder, then open localhost:8792

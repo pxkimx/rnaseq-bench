@@ -1,5 +1,18 @@
 # RNAseq Bench changelog
 
+## 3.8.1
+- **The web version reports QC properly.** matplotlib runs in Pyodide, so it now draws the same figures the
+  desktop app does: violins of genes, counts and mitochondrial percent with the cut-offs marked and removed
+  cells in red, counts-versus-genes coloured by mitochondrial percent, and the twenty highest-expressed
+  genes — which is also the ambient-RNA view. A breakdown says how many cells each cut-off removes, and the
+  figures redraw as you move a threshold, so a cut-off can be judged before a run is spent on it.
+- Also added: mean-variance and scree plots, cell cycle phase and a dissociation-stress score per cluster,
+  and colouring the UMAP by that score.
+- Two bugs found by testing the failure paths rather than the happy one. The buttons were clickable before
+  Python finished loading, and a click that failed disabled the example permanently. And with no cell-cycle
+  genes in the data both scores were zero, which the phase rule read as G2/M — reporting **100% cycling** for
+  a dataset containing none of the genes. It now says *not assessable* and how many of the set were found.
+
 ## 3.8
 - **New: a browser-only web version** (`source/webapp/`). Three static files, no server, nothing uploaded —
   QC with adaptive cut-offs, normalisation, variable genes, PCA, exact neighbours, Leiden clustering, UMAP

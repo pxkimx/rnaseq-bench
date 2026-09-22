@@ -12,16 +12,18 @@ const toast = m => {const t = document.createElement("div"); t.className = "toas
 /* ---------------------------------------------------------------- boot */
 (async () => {
   const bar = $("#bootBar"), msg = $("#bootMsg");
+  $("#demoBtn").disabled = true;
   const tick = (p, m) => {bar.style.width = p + "%"; if (m) msg.textContent = m};
   try {
     tick(8, "Starting Python…");
     const py = await loadPyodide();
     tick(30, "Loading numpy, scipy, scikit-learn, igraph, h5py…");
-    await py.loadPackage(["numpy", "scipy", "pandas", "scikit-learn", "igraph", "h5py"]);
+    await py.loadPackage(["numpy", "scipy", "pandas", "scikit-learn", "igraph", "h5py", "matplotlib"]);
     tick(85, "Loading the pipeline…");
     py.FS.writeFile("/pipeline.py", await (await fetch("pipeline.py")).text());
     py.runPython("import sys; sys.path.insert(0,'/'); import pipeline");
     S.py = py;
+    $("#demoBtn").disabled = false;
     tick(100, "Ready.");
     $("#bootCard").classList.add("hidden");
     $("#loadCard").classList.remove("hidden");
@@ -58,6 +60,7 @@ const textOf = async f => new TextDecoder().decode(await bytesOf(f));
 const find = re => S.files.find(f => re.test(f.name.toLowerCase()));
 
 $("#loadBtn").onclick = async () => {
+  if (!S.py) {toast("Python is still starting — a moment."); return}
   $("#loadBtn").disabled = true;
   try {
     const py = S.py, g = py.globals;
@@ -85,7 +88,9 @@ $("#loadBtn").onclick = async () => {
 
 $("#demoBtn").onclick = async () => {
   // a small synthetic set, so the pipeline can be tried without finding a file first
+  if (!S.py) {toast("Python is still starting — a moment."); return}
   $("#demoBtn").disabled = true;
+  try {
   const py = S.py;
   const qc = py.runPython(`
 import numpy as np, scipy.sparse as sp, pipeline
@@ -105,6 +110,10 @@ pipeline._finish_load(sp.csr_matrix(M.astype(np.float32)), names,
                       np.array([f"cell{i}" for i in range(n)], dtype=object))
 `).toJs({dict_converter: Object.fromEntries});
   showQC(qc);
+  } catch (e) {
+    toast("Could not build the example: " + String(e.message || e).slice(0, 110));
+    $("#demoBtn").disabled = false;
+  }
 };
 
 /* ---------------------------------------------------------------- QC panel */
@@ -135,12 +144,54 @@ function showQC(qc) {
     histSvg($("#histGenes"), qc.hist.genes, qc.hist.genes_edges, [+$("#minG").value, +$("#maxG").value]);
     histSvg($("#histMt"), qc.hist.mt, qc.hist.mt_edges, [+$("#maxMt").value]);
   };
-  ["#minG", "#maxG", "#maxMt"].forEach(s => $(s).oninput = draw);
+  let redraw;
+  ["#minG", "#maxG", "#maxMt"].forEach(s => $(s).oninput = () => {
+    draw();
+    clearTimeout(redraw);                       // wait for typing to stop before recomputing
+    if (!$("#qcResult").classList.contains("hidden")) redraw = setTimeout(previewQC, 700);
+  });
   draw();
+  setTimeout(previewQC, 50);
   $("#qcWhy").textContent = qc.has_mt
     ? `Cut-offs start from your data: median ± 5 MAD on genes per cell, median + 3 MAD on mitochondrial percent (clamped to 5–25%). Dashed lines mark them. Raise the mitochondrial limit rather than lose a population — dissociation-stressed tissue genuinely runs higher.`
     : `No mitochondrial genes were found in this matrix, so no cell is removed on that criterion. Gene cut-offs are median ± 5 MAD on your data.`;
 }
+
+/* The QC figures are computed for whatever cut-offs are currently in the boxes, so you can see which
+   cells they remove before spending a run on them. */
+let qcBusy = false;
+async function previewQC() {
+  if (qcBusy) return;
+  qcBusy = true;
+  const btn = $("#previewBtn"), was = btn.textContent;
+  btn.textContent = "Drawing…"; btn.disabled = true;
+  try {
+    const py = S.py, g = py.globals;
+    g.set("_mn", +$("#minG").value); g.set("_mx", +$("#maxG").value); g.set("_mt", +$("#maxMt").value);
+    await new Promise(r => setTimeout(r, 20));
+    const q = py.runPython("pipeline.qc_figures(int(_mn), int(_mx), float(_mt))").toJs({dict_converter: Object.fromEntries});
+    $("#figViolin").src = q.violins; $("#figScatter").src = q.scatter; $("#figHighest").src = q.highest;
+    const pct = (q.removed / (q.kept + q.removed) * 100).toFixed(1);
+    $("#qcVerdict").innerHTML = `These cut-offs keep <b>${q.kept.toLocaleString()}</b> cells and remove
+      <b>${q.removed.toLocaleString()}</b> (${pct}%).`;
+    $("#qcBreak").innerHTML = [
+      [q.kept.toLocaleString(), "kept"], [q.fails.too_few_genes.toLocaleString(), "too few genes"],
+      [q.fails.too_many_genes.toLocaleString(), "too many genes"], [q.fails.high_mito.toLocaleString(), "over the mito limit"],
+    ].map(([v, l]) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`).join("");
+    $("#soupBox").innerHTML = q.soup.length ? `<div class="warnbox" style="margin-top:10px">
+      <b>Ambient RNA looks substantial.</b> ${q.soup.map(x =>
+        `<b>${x.gene}</b> is ${x.share}% of all counts and is detected in ${x.detected}% of cells`).join("; ")}.
+      Transcripts leaking from lysed cells end up in every droplet, so every population carries some of the
+      dominant cell type's signature and the groups separate less cleanly. This app does not correct for it —
+      CellBender, SoupX or DecontX on the raw droplet matrix would, before you bring the data here.</div>` : "";
+    $("#qcResult").classList.remove("hidden");
+    btn.textContent = was === "Preview these cut-offs" ? "Update the preview" : was;
+  } catch (e) {
+    toast("Could not draw QC: " + String(e.message || e).slice(0, 110));
+    btn.textContent = was;
+  } finally {btn.disabled = false; qcBusy = false}
+}
+$("#previewBtn").onclick = previewQC;
 
 /* ---------------------------------------------------------------- run */
 const STEPS = [["Filtering cells and genes", 10], ["Normalising and finding variable genes", 28],
@@ -190,8 +241,11 @@ $("#runBtn").onclick = async () => {
     const mk = py.runPython("pipeline.markers()").toJs({dict_converter: Object.fromEntries});
     S.emb = JSON.parse(py.runPython("pipeline.embedding_payload()"));
     S.mk = mk;
+    stepUI(6, 96, "Scores and figures…"); await breathe();
+    const sc = py.runPython("pipeline.cell_scores()").toJs({dict_converter: Object.fromEntries});
+    const figs = py.runPython("pipeline.hvg_elbow_figures()").toJs({dict_converter: Object.fromEntries});
     stepUI(6, 100, "Done");
-    showResult(f, hv, cl, mk);
+    showResult(f, hv, cl, mk, sc, figs);
   } catch (e) {
     $("#runMsg").innerHTML = `<b style="color:var(--up)">Stopped:</b> ${String(e.message || e).slice(0, 400)}`;
     console.error(e);
@@ -203,7 +257,7 @@ function mulberry32(a) {return function () {a |= 0; a = a + 0x6D2B79F5 | 0;
   return ((t ^ t >>> 14) >>> 0) / 4294967296}}
 
 /* ---------------------------------------------------------------- result */
-function showResult(f, hv, cl, mk) {
+function showResult(f, hv, cl, mk, sc, figs) {
   $("#runCard").classList.add("hidden"); $("#resCard").classList.remove("hidden");
   $("#resTiles").innerHTML = [
     [f.cells_kept.toLocaleString(), "cells after QC"], [f.cells_removed.toLocaleString(), "cells removed"],
@@ -220,6 +274,35 @@ function showResult(f, hv, cl, mk) {
     const i = +b.dataset.i; S.hidden.has(i) ? S.hidden.delete(i) : S.hidden.add(i);
     b.classList.toggle("off"); draw();
   });
+  $("#figHvg").src = figs.hvg; $("#figElbow").src = figs.elbow;
+
+  if (sc.cc_ok) {
+    const cyc = sc.phase_counts.S + sc.phase_counts.G2M;
+    $("#scoreTiles").innerHTML = [
+      [sc.phase_counts.G1.toLocaleString(), "in G1"], [sc.phase_counts.S.toLocaleString(), "in S"],
+      [sc.phase_counts.G2M.toLocaleString(), "in G2/M"],
+      [(cyc / (cyc + sc.phase_counts.G1) * 100).toFixed(1) + "%", "cycling"],
+    ].map(([v, l]) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`).join("");
+  } else {
+    $("#scoreTiles").innerHTML = `<div class="tile" style="grid-column:1/-1"><b>Not assessable</b>
+      <span>only ${sc.genes_found.S} of the S-phase and ${sc.genes_found.G2M} of the G2/M genes are in this
+      dataset — too few to place a cell in a phase, so none is reported</span></div>`;
+  }
+  $("#stressBox").innerHTML = !sc.diss_ok
+    ? `<p class="note">Dissociation stress is not assessable here: only ${sc.genes_found.dissociation} of the
+       signature's genes are present.</p>`
+    : sc.stress_flag ? `<div class="warnbox" style="margin-top:10px">
+    <b>Cluster ${sc.stress_cluster} carries the dissociation signature.</b> Warm enzymatic digestion switches
+    on immediate-early and heat-shock genes within minutes, and the cells that respond most cluster together
+    and pass for a cell type. Check its markers before naming it; dissociating at 4 °C, or with a cold-active
+    protease, avoids this.</div>` : `<p class="note">No cluster stands out on the dissociation score
+    (spread ${sc.stress_spread}), so handling stress is unlikely to be driving any of these groups.</p>`;
+  const cell = v => v == null ? '<span style="color:var(--muted)">—</span>' : v;
+  $("#scTable").querySelector("tbody").innerHTML = Object.entries(sc.per_cluster).map(([c, v]) =>
+    `<tr><td>${c}</td><td class="mono">${cl.sizes[+c].toLocaleString()}</td>
+     <td class="mono">${cell(v.cycling == null ? null : v.cycling + "%")}</td>
+     <td class="mono">${cell(v.stress)}</td></tr>`).join("");
+  S.sc = sc;
   S.mode = "cluster"; draw();
 }
 
@@ -253,7 +336,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 $("#colorBy").onchange = async () => {
   const m = $("#colorBy").value;
   if (m === "gene") {$("#geneQ").focus(); return}
-  S.mode = m; S.vals = m === "cluster" ? null : S.emb[m]; $("#geneMsg").textContent = ""; draw();
+  S.mode = m; S.vals = m === "cluster" ? null : (m === "stress" ? (S.sc.diss || null) : S.emb[m]);
+  if (m === "stress" && !S.vals) {toast("No dissociation score for this dataset."); S.mode = "cluster"; $("#colorBy").value = "cluster"}
+  $("#geneMsg").textContent = ""; draw();
 };
 $("#geneQ").onchange = () => {
   const g = $("#geneQ").value.trim(); if (!g) return;

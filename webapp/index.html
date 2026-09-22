@@ -56,6 +56,7 @@ td{padding:4px 6px;border-bottom:1px solid var(--line2)}
 .warnbox b{color:var(--warn)}
 .hidden{display:none}
 svg.hist{width:100%;height:90px;display:block}
+img.fig{width:100%;height:auto;display:block;border:1px solid var(--line2);border-radius:10px;background:#fff}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);
  padding:9px 15px;border-radius:10px;font-size:13px;z-index:50}
 </style></head>
@@ -127,7 +128,25 @@ the page and never sent anywhere — there is no server to send them to.</p>
     <label class="f">Neighbours (k)<input type="number" id="kNN" value="15"></label>
   </div>
   <p class="note" id="qcWhy"></p>
-  <button class="btn accent" id="runBtn" style="margin-top:6px">Run the analysis</button>
+  <div class="row" style="margin-top:6px">
+    <button class="btn" id="previewBtn">Preview these cut-offs</button>
+    <button class="btn accent" id="runBtn">Run the analysis</button>
+  </div>
+
+  <div class="hidden" id="qcResult" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+    <h2 style="font-size:15px">QC results</h2>
+    <div class="sub" id="qcVerdict"></div>
+    <div class="tiles" id="qcBreak"></div>
+    <img id="figViolin" class="fig" alt="QC metrics per cell">
+    <div class="grid2" style="margin-top:10px">
+      <div><img id="figScatter" class="fig" alt="counts vs genes"></div>
+      <div><img id="figHighest" class="fig" alt="highest expressed genes"></div>
+    </div>
+    <div id="soupBox"></div>
+    <p class="note">Red points are the cells these cut-offs remove. Dashed lines are the cut-offs themselves.
+      The counts-versus-genes cloud should be one smooth band; a separate low-left clump is usually empty
+      droplets, and a high tail is usually doublets.</p>
+  </div>
 </div>
 
 <div class="card hidden" id="runCard">
@@ -149,12 +168,29 @@ the page and never sent anywhere — there is no server to send them to.</p>
       <label class="f">Colour by
         <select id="colorBy"><option value="cluster">Cluster</option>
           <option value="n_genes">Genes per cell</option><option value="pct_mt">Mitochondrial %</option>
+          <option value="stress">Dissociation stress</option>
           <option value="gene">A gene…</option></select></label>
       <label class="f" style="margin-top:8px">Gene
         <input id="geneQ" list="geneList" placeholder="e.g. CD3E"><datalist id="geneList"></datalist></label>
       <div class="sub" id="geneMsg" style="margin-top:8px"></div>
     </div>
   </div>
+  <h2 style="margin-top:18px">Feature selection</h2>
+  <div class="grid2">
+    <div><img id="figHvg" class="fig" alt="variable genes"></div>
+    <div><img id="figElbow" class="fig" alt="scree plot"></div>
+  </div>
+
+  <h2 style="margin-top:18px">Per-cell scores</h2>
+  <div class="sub">Cell cycle phase from the Tirosh et al. S and G2/M gene sets, and a dissociation-stress
+    score from the immediate-early and heat-shock genes warm digestion switches on within minutes
+    (van den Brink et al. 2017).</div>
+  <div class="tiles" id="scoreTiles"></div>
+  <div id="stressBox"></div>
+  <div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:8px">
+    <table id="scTable"><thead><tr><th>Cluster</th><th>Cells</th><th>Cycling (S or G2/M)</th><th>Stress score</th></tr></thead><tbody></tbody></table>
+  </div>
+
   <h2 style="margin-top:18px">Marker genes</h2>
   <div class="sub">Rank-sum of each cluster against every other cell. A ranking of what marks each cluster —
     the p-values behind it are optimistic, because the clusters were defined from these same values.</div>

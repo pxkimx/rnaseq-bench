@@ -214,6 +214,7 @@ def neighbors_and_cluster(n_pcs: int = 0, k: int = 15, resolution: float = 0.5) 
     import igraph as ig
 
     P = STATE["pca"][:, :int(n_pcs)] if n_pcs else STATE["pca"]
+    STATE["n_pcs_used"] = int(P.shape[1])
     n = P.shape[0]
     k = int(min(k, n - 1))
     nn = NearestNeighbors(n_neighbors=k + 1, algorithm="brute", metric="euclidean").fit(P)
@@ -327,3 +328,207 @@ def embedding_payload() -> str:
         "genes": [str(g) for g in STATE["genes_f"]],
         "top_markers": STATE.get("top_markers", {}),
     })
+
+
+# ---------------------------------------------------------------- figures
+# matplotlib is in Pyodide, so the web build can draw the same figures as the desktop app rather than
+# hand-rolled SVG. Each returns a base64 PNG the page drops straight into an <img>.
+def _style():
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    plt.rcParams.update({"figure.dpi": 130, "savefig.dpi": 130, "font.size": 8,
+                         "axes.spines.top": False, "axes.spines.right": False,
+                         "axes.edgecolor": "#9aa8b0", "axes.labelcolor": "#33454f",
+                         "xtick.color": "#6a7b84", "ytick.color": "#6a7b84",
+                         "axes.titlesize": 9, "figure.facecolor": "white"})
+    return plt
+
+
+def _png(fig) -> str:
+    import base64
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", facecolor="white")
+    import matplotlib.pyplot as plt
+    plt.close(fig)
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+ACCENT, BAD = "#0f766e", "#c9304f"
+
+
+def _violin(ax, values, keep, title, lines=(), log=False):
+    v = np.asarray(values, float)
+    t = np.log10(v + 1) if log else v
+    parts = ax.violinplot(t, positions=[0], widths=0.85, showextrema=False)
+    for b in parts["bodies"]:
+        b.set_facecolor(ACCENT); b.set_edgecolor(ACCENT); b.set_alpha(0.25)
+    rng = np.random.default_rng(0)
+    pick = rng.choice(len(t), size=min(len(t), 3000), replace=False)
+    jit = rng.uniform(-0.3, 0.3, len(pick))
+    k = np.asarray(keep)[pick]
+    ax.scatter(jit[k], t[pick][k], s=1.6, c=ACCENT, alpha=0.35, linewidths=0, rasterized=True)
+    ax.scatter(jit[~k], t[pick][~k], s=3.2, c=BAD, alpha=0.85, linewidths=0, rasterized=True)
+    q1, med, q3 = np.percentile(t, [25, 50, 75])
+    ax.plot([0, 0], [q1, q3], color="#222", lw=2.6, solid_capstyle="butt")
+    ax.scatter([0], [med], color="white", s=12, zorder=3, edgecolor="#222", linewidth=0.7)
+    for ln in lines:
+        ax.axhline(np.log10(ln + 1) if log else ln, color=BAD, ls="--", lw=0.9)
+    ax.set_xticks([]); ax.set_title(title)
+    ax.set_ylabel("log10(1+x)" if log else "")
+
+
+def qc_figures(min_genes: int, max_genes: int, max_mt: float) -> dict:
+    """The QC panel: what each cell looks like, and which ones the cut-offs remove."""
+    plt = _style()
+    ng, tot, mt = STATE["n_genes"], STATE["total"], STATE["pct_mt"]
+    keep = (ng >= min_genes) & (ng <= max_genes) & (mt <= max_mt)
+    has_mt = STATE["has_mt"]
+
+    fig, axs = plt.subplots(1, 3, figsize=(7.6, 2.7))
+    _violin(axs[0], ng, keep, "genes per cell", [min_genes, max_genes], log=True)
+    _violin(axs[1], tot, keep, "counts per cell", [], log=True)
+    _violin(axs[2], mt, keep, "mitochondrial %", [max_mt] if has_mt else [])
+    fig.tight_layout()
+    violins = _png(fig)
+
+    fig, ax = plt.subplots(figsize=(3.6, 3.0))
+    rng = np.random.default_rng(0)
+    pick = rng.choice(len(ng), size=min(len(ng), 8000), replace=False)
+    s = ax.scatter(tot[pick], ng[pick], c=mt[pick], s=3, cmap="viridis", linewidths=0,
+                   vmax=max(10, float(np.percentile(mt, 99))), rasterized=True)
+    ax.set_xscale("log"); ax.set_yscale("log")
+    ax.set_xlabel("counts per cell"); ax.set_ylabel("genes per cell")
+    ax.axhline(min_genes, color=BAD, ls="--", lw=0.9); ax.axhline(max_genes, color=BAD, ls="--", lw=0.9)
+    ax.set_title("counts vs genes")
+    fig.colorbar(s, ax=ax, fraction=0.04, pad=0.02, label="% mito")
+    fig.tight_layout()
+    scatter = _png(fig)
+
+    # Highest-expressed genes: the ambient-RNA view. A gene taking a large share of all counts and
+    # detected in nearly every cell is soup from lysed cells, not biology.
+    X = STATE["X"]
+    share = np.asarray(X.sum(0)).ravel()
+    share = share / max(share.sum(), 1)
+    det = np.asarray((X > 0).mean(0)).ravel()
+    top = np.argsort(-share)[:20]
+    fig, ax = plt.subplots(figsize=(4.2, 3.4))
+    ax.barh(range(len(top)), share[top][::-1] * 100, color=ACCENT, alpha=0.85)
+    ax.set_yticks(range(len(top)))
+    ax.set_yticklabels([str(STATE["genes"][i]) for i in top][::-1], fontsize=7)
+    ax.set_xlabel("% of all counts"); ax.set_title("highest-expressed genes")
+    fig.tight_layout()
+    highest = _png(fig)
+
+    soup = [{"gene": str(STATE["genes"][i]), "share": round(float(share[i] * 100), 2),
+             "detected": round(float(det[i] * 100), 1)}
+            # a true soup gene is in nearly every cell, not half of them: at 50% this flagged a
+            # cluster marker, while real ambient (TTR in choroid plexus) sits at 9.5% of counts in 100%
+            for i in top[:5] if share[i] > 0.01 and det[i] > 0.75]
+
+    fails = {
+        "too_few_genes": int((ng < min_genes).sum()),
+        "too_many_genes": int((ng > max_genes).sum()),
+        "high_mito": int((mt > max_mt).sum()) if has_mt else 0,
+    }
+    return {"violins": violins, "scatter": scatter, "highest": highest,
+            "kept": int(keep.sum()), "removed": int((~keep).sum()), "fails": fails, "soup": soup}
+
+
+# ---------------------------------------------------------------- per-cell scores
+S_GENES = ["MCM5", "PCNA", "TYMS", "FEN1", "MCM2", "MCM4", "RRM1", "UNG", "GINS2", "MCM6", "CDCA7",
+           "DTL", "PRIM1", "UHRF1", "HELLS", "RFC2", "RPA2", "NASP", "RAD51AP1", "GMNN", "WDR76",
+           "SLBP", "CCNE2", "UBR7", "POLD3", "MSH2", "ATAD2", "RAD51", "RRM2", "CDC45", "CDC6",
+           "EXO1", "TIPIN", "DSCC1", "BLM", "CASP8AP2", "USP1", "CLSPN", "POLA1", "CHAF1B", "BRIP1", "E2F8"]
+G2M_GENES = ["HMGB2", "CDK1", "NUSAP1", "UBE2C", "BIRC5", "TPX2", "TOP2A", "NDC80", "CKS2", "NUF2",
+             "CKS1B", "MKI67", "TMPO", "CENPF", "TACC3", "SMC4", "CCNB2", "CKAP2L", "CKAP2", "AURKB",
+             "BUB1", "KIF11", "ANP32E", "TUBB4B", "GTSE1", "KIF20B", "HJURP", "CDCA3", "CDC20",
+             "TTK", "CDC25C", "KIF2C", "RANGAP1", "NCAPD2", "DLGAP5", "CDCA2", "CDCA8", "ECT2", "KIF23",
+             "HMMR", "AURKA", "PSRC1", "ANLN", "LBR", "CKAP5", "CENPE", "CTCF", "NEK2", "G2E3", "GAS2L3"]
+# immediate-early and heat-shock genes induced by warm dissociation (van den Brink et al. 2017)
+DISSOCIATION = ["FOS", "FOSB", "JUN", "JUNB", "JUND", "EGR1", "ATF3", "IER2", "IER3", "DUSP1", "ZFP36",
+                "SOCS3", "KLF6", "BTG2", "NR4A1", "PPP1R15A", "CEBPB", "RHOB", "SGK1", "NFKBIA",
+                "HSPA1A", "HSPA1B", "HSPA8", "HSPB1", "HSPH1", "HSP90AA1", "DNAJB1", "SQSTM1", "UBC"]
+
+
+def _score(names: list[str]) -> tuple[np.ndarray, int]:
+    """Mean scaled expression of a gene set minus a matched-expression control, as score_genes does.
+
+    Also returns how many of the set were actually found. A score computed from two genes, or none, is
+    not a weak result — it is no result, and the caller has to be able to tell the difference.
+    """
+    Xn = STATE["Xn"]
+    up = np.array([str(g).upper() for g in STATE["genes_f"]])
+    idx = np.where(np.isin(up, [g.upper() for g in names]))[0]
+    if len(idx) < 5:
+        return np.zeros(Xn.shape[0], np.float32), int(len(idx))
+    mean = np.asarray(Xn.mean(0)).ravel()
+    order = np.argsort(mean)
+    rank = np.empty_like(order); rank[order] = np.arange(len(order))
+    ctrl = []
+    for i in idx:                                        # 50 control genes at a similar level
+        lo = max(0, rank[i] - 60); hi = min(len(order), rank[i] + 60)
+        ctrl.extend(order[lo:hi])
+    ctrl = np.setdiff1d(np.unique(ctrl), idx)
+    a = np.asarray(Xn[:, idx].mean(1)).ravel()
+    b = np.asarray(Xn[:, ctrl].mean(1)).ravel() if len(ctrl) else 0.0
+    return (a - b).astype(np.float32), int(len(idx))
+
+
+def cell_scores() -> dict:
+    """Cell cycle and dissociation stress, per cell and summarised per cluster."""
+    lab = STATE["leiden"]
+    s, n_s = _score(S_GENES)
+    g2m, n_g = _score(G2M_GENES)
+    diss, n_d = _score(DISSOCIATION)
+    cc_ok = n_s >= 5 and n_g >= 5
+    diss_ok = n_d >= 5
+    # Without the genes there is no phase to assign. Calling every cell G2/M because both scores are
+    # zero would be a confident answer built on nothing.
+    phase = (np.where((s < 0) & (g2m < 0), "G1", np.where(s > g2m, "S", "G2M"))
+             if cc_ok else np.full(len(s), "unknown", dtype=object))
+    STATE.update(s_score=s, g2m_score=g2m, diss=diss, phase=phase)
+
+    per = {}
+    for c in range(int(lab.max()) + 1):
+        m = lab == c
+        per[str(c)] = {"cycling": round(float((phase[m] != "G1").mean() * 100), 1) if cc_ok else None,
+                       "stress": round(float(diss[m].mean()), 3) if diss_ok else None}
+    out = {"per_cluster": per, "cc_ok": cc_ok, "diss_ok": diss_ok,
+           "genes_found": {"S": n_s, "G2M": n_g, "dissociation": n_d},
+           "phase_counts": ({p: int((phase == p).sum()) for p in ("G1", "S", "G2M")} if cc_ok else None),
+           "diss": np.round(diss, 3).tolist() if diss_ok else None}
+    if diss_ok:
+        vals = [v["stress"] for v in per.values()]
+        spread = float(np.max(vals) - np.median(vals))
+        out.update(stress_spread=round(spread, 3),
+                   stress_cluster=max(per, key=lambda c: per[c]["stress"]),
+                   stress_flag=bool(spread > 0.25))
+    return out
+
+
+def hvg_elbow_figures() -> dict:
+    """Feature selection and how many components the elbow justifies."""
+    plt = _style()
+    Xn, hvg = STATE["Xn"], STATE["hvg"]
+    n = Xn.shape[0]
+    mean = np.asarray(Xn.mean(0)).ravel()
+    sq = np.asarray(Xn.multiply(Xn).mean(0)).ravel()
+    var = np.maximum(sq - mean ** 2, 0) * n / max(n - 1, 1)
+    fig, ax = plt.subplots(figsize=(3.6, 3.0))
+    ax.scatter(mean[~hvg], var[~hvg], s=2, c="#c7ccd1", linewidths=0, rasterized=True, label="other")
+    ax.scatter(mean[hvg], var[hvg], s=2.5, c=BAD, linewidths=0, rasterized=True, label="selected")
+    ax.set_xscale("symlog", linthresh=1e-3); ax.set_yscale("symlog", linthresh=1e-3)
+    ax.set_xlabel("mean expression"); ax.set_ylabel("variance")
+    ax.set_title(f"{int(hvg.sum()):,} variable genes kept"); ax.legend(frameon=False, fontsize=7)
+    fig.tight_layout()
+    hvg_png = _png(fig)
+
+    vr = STATE["var_ratio"] * 100
+    fig, ax = plt.subplots(figsize=(3.6, 3.0))
+    ax.plot(np.arange(1, len(vr) + 1), vr, "o-", ms=3, color=ACCENT, lw=1)
+    ax.axvline(STATE.get("n_pcs_used", 0) + 0.5, color="#888", ls="--", lw=0.9)
+    ax.set_xlabel("principal component"); ax.set_ylabel("% variance")
+    ax.set_title("scree plot")
+    fig.tight_layout()
+    return {"hvg": hvg_png, "elbow": _png(fig)}
