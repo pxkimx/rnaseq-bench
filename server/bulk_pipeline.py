@@ -124,8 +124,12 @@ def run(job: Job, files: list[Path], params: dict):
     ref = params.get("reference") if params.get("reference") in levels else levels[0]
     alts = [l for l in levels if l != ref]
     alt = params.get("alternative") if params.get("alternative") in alts else alts[0]
-    alpha = float(params.get("alpha") or 0.05)
-    lfc_thr = float(params.get("lfc") or 1.0)
+    # `params.get(x) or default` would treat an explicit 0 the same as "not set" (0 is falsy in Python),
+    # silently replacing a user's "no minimum fold-change" or an ultra-strict alpha=0 with the default —
+    # and the report would then claim a threshold that was never actually applied. Only a missing/empty
+    # value should fall back to the default.
+    alpha = float(params["alpha"]) if params.get("alpha") not in (None, "") else 0.05
+    lfc_thr = float(params["lfc"]) if params.get("lfc") not in (None, "") else 1.0
     job.result["params"] = {"factor": factor, "reference": ref, "alternative": alt, "covariates": covars,
                             "alpha": alpha, "lfc": lfc_thr, "columns": cand, "levels": {c: sorted(meta[c].unique()) for c in cand}}
 

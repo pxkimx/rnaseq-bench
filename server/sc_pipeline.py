@@ -257,9 +257,12 @@ def run(job: Job, files: list[Path], params: dict):
     obs_max = int(adata.obs["n_genes_by_counts"].max())
     auto_max = min(auto_max_raw, obs_max)
     auto_mt = float(np.clip(np.median(mtv) + 3 * mad(mtv), 5, 25)) if has_mt else 100.0
-    min_g = int(P["min_genes"] or auto_min)
-    max_g = int(P["max_genes"] or auto_max)
-    max_mt = float(P["max_mt"] or auto_mt)
+    # `P[x] or default` would treat an explicit 0 (e.g. "no minimum genes floor") the same as "not set",
+    # since 0 is falsy in Python — silently swapping in the auto threshold and reporting it as if it were
+    # what the user asked for. P already drops None/"" (see DEFAULTS merge above), so only None means unset.
+    min_g = int(P["min_genes"]) if P["min_genes"] is not None else auto_min
+    max_g = int(P["max_genes"]) if P["max_genes"] is not None else auto_max
+    max_mt = float(P["max_mt"]) if P["max_mt"] is not None else auto_mt
     top20 = adata.obs["pct_counts_in_top_20_genes"].values
     top_cut = np.median(top20) + 5 * mad(top20)
 
