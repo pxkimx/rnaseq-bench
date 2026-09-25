@@ -1,0 +1,30 @@
+name: tests
+
+on:
+  pull_request:
+
+jobs:
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    env:
+      # Pre-made offline copies of the gene-set / pathway resources (see server/resources.py),
+      # so nothing in these runs reaches the network.
+      RB_RESOURCE_DIR: tests/res_offline
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Gene dossier (offline checks)
+        run: python tests/test_dossier.py
+
+      - name: Self-test (simulated single-cell + bulk run)
+        run: python -m server.selftest
