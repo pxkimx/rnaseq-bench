@@ -32,6 +32,14 @@
   `2026-09-23_RNAseqBench-SingleCell_report.pdf` or `…_RNAseqBench-Bulk_report.pdf`. The date is the day the analysis ran,
   so a report saved again later still carries the date of what it shows. It used to be `report.pdf` every time, which
   collided in Downloads and said nothing about what it was.
+- **Typing 0 into a threshold now actually means 0.** Two Parameters fields let you type 0 on purpose —
+  bulk's "minimum |log2 fold change|" (call a gene significant on FDR alone, no fold-change cut-off) and
+  single-cell's "minimum genes per cell" (skip the lower filter on data you already cleaned up, or on
+  single-nucleus data where very low gene counts are normal). Both were silently swapped back to the
+  built-in default the moment you entered 0, because the code treated "0" the same as "left blank" — so
+  the gene list, the volcano plot and the QC count were computed with a threshold you never asked for,
+  while the Parameters panel and report kept claiming the 0 you typed. Re-analyze with either field set
+  to 0 now uses 0; only actually leaving a field empty still falls back to the automatic value.
 
 ## 3.8.1
 - **The web version reports QC properly.** matplotlib runs in Pyodide, so it now draws the same figures the
