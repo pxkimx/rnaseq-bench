@@ -195,6 +195,43 @@ th{position:sticky;top:0;background:var(--panel2);text-align:left;font:500 11px 
 td{padding:6px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
 tr:hover td{background:var(--panel2)}
 td.gene{font-family:var(--mono);font-weight:500}
+td.gene.dz{cursor:pointer;text-decoration:underline dotted color-mix(in srgb,var(--accent) 55%,transparent);text-underline-offset:3px}
+td.gene.dz:hover{color:var(--accent)}
+.dzlink{all:unset;cursor:pointer;color:var(--accent);font-weight:600;text-decoration:underline dotted;text-underline-offset:3px}
+/* gene dossier drawer */
+.drawer.dossier{width:min(600px,100%)}
+.dossier .dh{gap:10px;flex-wrap:wrap}
+.dossier .dh h3{font:650 20px var(--mono);letter-spacing:-.02em;flex:none}
+.dossier .dh .nm{flex:1;min-width:0;color:var(--ink2);font-size:13px}
+.dossier .dh select{height:30px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);font-size:12.5px;padding:0 6px}
+.dossier .db{padding:4px 18px 18px;display:flex;flex-direction:column;gap:4px}
+.dz-sec{padding:14px 0 6px;border-top:1px solid var(--line2)}
+.dz-sec:first-child{border-top:0}
+.dz-sec h4{margin:0 0 6px;font:500 10.5px var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);display:flex;gap:8px;align-items:baseline}
+.dz-sec h4 a{font:500 10.5px var(--mono);letter-spacing:.02em;text-transform:none;margin-left:auto}
+.dz-sec p{margin:0;font-size:13.5px;color:var(--ink2);line-height:1.6}
+.dz-sec p.clamp{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.dz-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.dz-here{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:10px}
+.dz-here div{border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:var(--panel2)}
+.dz-here b{display:block;font:600 15px var(--mono);font-variant-numeric:tabular-nums}
+.dz-here span{font-size:11px;color:var(--muted)}
+.dz-list{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;list-style:none}
+.dz-list li{font-size:13px;padding:5px 0;border-bottom:1px dashed var(--line2)}
+.dz-list li:last-child{border-bottom:0}
+.dz-list li a{text-decoration:none;color:var(--ink);font-weight:550}
+.dz-list li a:hover{color:var(--accent)}
+.dz-list li small{display:block;color:var(--muted);font-size:11.5px;margin-top:1px}
+.dz-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;margin:8px 0 6px;border:1px solid var(--line2)}
+.dz-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--muted)}
+.dz-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.dz-track{width:100%;height:auto;display:block;margin-top:4px}
+.dz-track text{font:10.5px var(--sans);fill:var(--ink2)}
+.dz-note{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;font-size:12.5px;color:var(--ink2);padding:6px 0}
+.dz-skel{height:12px;border-radius:6px;background:linear-gradient(90deg,var(--bg2),var(--line2),var(--bg2));background-size:200% 100%;animation:dzsh 1.2s infinite;margin:8px 0}
+@keyframes dzsh{to{background-position:-200% 0}}
+.dz-ctx{display:flex;gap:6px;margin-top:8px}
+.dz-ctx input{flex:1;height:30px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--panel2);font-size:12.5px;min-width:0}
 .note{color:var(--muted);font-size:12.5px;padding:8px 16px 16px}
 .methods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 @media (max-width:800px){.methods{grid-template-columns:1fr}}
@@ -838,7 +875,7 @@ function renderResults(R){const job=S.job,root=$("#results");root.innerHTML="";
  const top=el("div","top");top.innerHTML=`<span class="badge">${R.kind==="sc"?"single-cell":"bulk RNA-seq"}</span><h1 title="${esc(R.name)}">${esc(R.name)}</h1>
   <button class="btn sm" id="codeBtn2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 5l-2 14"/></svg>View code</button>
   <button class="btn sm" id="tuneBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Parameters</button>
-  <a class="btn sm accent" href="${F(job,"report.pdf")}" download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>PDF report</a>`;
+  <a class="btn sm accent" href="${F(job,"report.pdf")}" download="${esc(R.report_name||"")}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>PDF report</a>`;
  root.appendChild(top);top.querySelector("#tuneBtn").onclick=()=>{const t=document.getElementById("params")||document.getElementById("methods");if(t)t.scrollIntoView({behavior:"smooth"});else openTune(R)};top.querySelector("#codeBtn2").onclick=()=>openCode(S.job);
  $("#chatCtx").textContent=R.name;setChips(R);
  const tiles=el("div","tiles");tiles.innerHTML=R.tiles.map(t=>`<div class="tile"><b style="${String(t.value).length>10?"font-size:17px":""}">${esc(t.value)}</b><span>${esc(t.label)}</span></div>`).join("");root.appendChild(tiles);
@@ -852,7 +889,7 @@ function renderResults(R){const job=S.job,root=$("#results");root.innerHTML="";
  $("#nav").innerHTML=navItems.map(([id,l],i)=>`<a href="#${id}" data-id="${id}"><i>${i===0?"◎":i===navItems.length-1?"≡":i}</i>${esc(l)}</a>`).join("");
  $$("#nav a").forEach(a=>a.onclick=e=>{e.preventDefault();document.getElementById(a.dataset.id).scrollIntoView({behavior:"smooth"})});
  const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)$$("#nav a").forEach(a=>a.classList.toggle("on",a.dataset.id===e.target.id))})},{rootMargin:"-30% 0px -60% 0px"});navItems.forEach(([id])=>{const n=document.getElementById(id);if(n)obs.observe(n)});
- $("#dl").innerHTML=[{label:"PDF report",href:"report.pdf"},...R.downloads].map(d=>`<a href="${F(job,d.href)}" download><span>${esc(d.label.replace(/ \(\.\w+\)$/,""))}</span><span>${esc((d.href.split(".").pop()))}</span></a>`).join("");
+ $("#dl").innerHTML=[{label:"PDF report",href:"report.pdf"},...R.downloads].map(d=>`<a href="${F(job,d.href)}" download="${d.href==="report.pdf"?esc(R.report_name||""):""}"><span>${esc(d.label.replace(/ \(\.\w+\)$/,""))}</span><span>${esc((d.href.split(".").pop()))}</span></a>`).join("");
 }
 function figCard(it,job){const c=el("article","card"+(it.wide?" wide":""));const src=F(job,it.src);
  c.innerHTML=`<div class="hd"><div><h3>${esc(it.title)}</h3>${it.sub?`<div class="sub">${esc(it.sub)}</div>`:""}</div><div class="act">${it.vector?`<a class="btn ghost sm vec" href="${F(job,it.vector)}" download="${esc(it.id)}.pdf" title="Download as vector PDF — text stays editable, for figure assembly and journal submission">PDF</a>`:""}<a class="btn ghost sm" href="${src}" download="${esc(it.id)}.png" title="Download PNG (200 dpi)" aria-label="Download PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg></a></div></div>
@@ -861,9 +898,12 @@ function figCard(it,job){const c=el("article","card"+(it.wide?" wide":""));const
 function tableCard(it,job){const c=el("article","card wide");let sortCol=-1,dir=1,q="";
  c.innerHTML=`<div class="hd"><div><h3>${esc(it.title)}</h3><div class="sub">${it.rows.length} rows</div></div><div class="act">${it.csv?`<a class="btn sm" href="${F(job,it.csv)}" download>Full CSV</a>`:""}</div></div><div class="tbl"><div class="tools"><input type="search" placeholder="Filter rows…" aria-label="Filter ${esc(it.title)}"></div><div class="tscroll"><table><thead><tr>${it.columns.map((h,i)=>`<th data-i="${i}">${esc(h)}</th>`).join("")}</tr></thead><tbody></tbody></table></div></div>${it.note?`<div class="note">${safe(it.note)}</div>`:""}`;
  const tb=c.querySelector("tbody");const geneCol=it.columns.findIndex(h=>/gene/i.test(h)&&!/genes/i.test(h));
+ const dzCol=geneCol>=0&&!/gene set/i.test(it.columns[geneCol])?geneCol:/marker/i.test(it.id)?1:-1;   /* a gene-set name is not a gene */
  const num=v=>{const x=parseFloat(String(v).replace(/[,%]/g,""));return isNaN(x)?null:x};
  function draw(){let rows=it.rows.filter(r=>!q||r.join(" ").toLowerCase().includes(q));if(sortCol>=0)rows=rows.slice().sort((a,b)=>{const x=num(a[sortCol]),y=num(b[sortCol]);return(x!=null&&y!=null?x-y:String(a[sortCol]).localeCompare(String(b[sortCol])))*dir});
-  tb.innerHTML=rows.map(r=>`<tr>${r.map((v,i)=>`<td class="${i===geneCol||(i===1&&/marker/i.test(it.id))?"gene":""}">${esc(v)}</td>`).join("")}</tr>`).join("")}
+  tb.innerHTML=rows.map(r=>`<tr>${r.map((v,i)=>`<td class="${i===dzCol?"gene dz":i===geneCol?"gene":""}"${i===dzCol?` title="What is ${esc(v)}? Click for the gene dossier"`:""}>${esc(v)}</td>`).join("")}</tr>`).join("")}
+ tb.onclick=e=>{const td=e.target.closest("td.dz");if(!td)return;const tr=td.parentElement,cells=[...tr.children].map(x=>x.textContent);
+  openDossier(td.textContent.trim(),{title:it.title,values:it.columns.map((h,i)=>[h,cells[i]]).filter((_,i)=>cells[i]!==td.textContent)})};
  c.querySelector("input").oninput=e=>{q=e.target.value.toLowerCase();draw()};
  c.querySelectorAll("th").forEach(th=>th.onclick=()=>{const i=+th.dataset.i;dir=sortCol===i?-dir:1;sortCol=i;draw()});draw();return c}
 
@@ -887,7 +927,7 @@ function explorerCard(it,job){const c=el("article","card wide");
  gq.onchange=()=>{sel.value="gene";loadGene(gq.value)};
  async function loadGene(g){g=g.trim();if(!g)return;status.textContent="Loading "+g+"…";const r=await fetch(`/api/jobs/${job}/gene/${encodeURIComponent(g)}`);if(!r.ok){status.textContent=g+" is not in this dataset.";return}const d=await r.json();
   vals=d.values;let mx=0;for(const v of vals)mx=Math.max(mx,v);const best=d.cluster_means.indexOf(Math.max(...d.cluster_means));
-  mode="gene";cats=null;status.innerHTML=`<b>${esc(d.gene)}</b> detected in ${(100*d.pct_expressing).toFixed(1)}% of cells; highest in <b>${esc(E.clusters[best])}</b>.`;
+  mode="gene";cats=null;status.innerHTML=`<button class="dzlink" title="Gene dossier" onclick="openDossier(${esc(JSON.stringify(d.gene))})">${esc(d.gene)}</button> detected in ${(100*d.pct_expressing).toFixed(1)}% of cells; highest in <b>${esc(E.clusters[best])}</b>.`;
   leg.innerHTML=`<div class="grad"></div><div class="row between hint"><span>0</span><span>${mx.toFixed(1)} log1p</span></div><div class="leg" style="margin-top:6px">${d.cluster_means.map((m,k)=>`<div class="row between hint" style="gap:6px"><span style="display:flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:2px;background:${E.colors[k]}"></i>${esc(E.clusters[k])}</span><span class="mono">${m.toFixed(2)}</span></div>`).join("")}</div>`;
   vals.__max=mx||1;draw()}
  function setMode(m){mode=m;hidden.clear();
@@ -1352,6 +1392,8 @@ async function openSettings(){const cur=await (await fetch("/api/settings")).jso
  <label>Anthropic API key <input type="password" id="st_key" placeholder="${cur.has_key?"Saved ("+esc(cur.key_hint)+") — paste to replace":"sk-ant-…"}"></label>
  <label>Model <select id="st_model">${[cur.model].map(x=>`<option selected>${esc(x)}</option>`).join("")}</select></label>
  <div class="row"><button class="btn sm" id="st_test">Test key &amp; list models</button><span class="hint" id="st_msg"></span></div>
+ <label>Email for NCBI (optional) <input type="email" id="st_ncbi" value="${esc(cur.ncbi_email||"")}" placeholder="you@institute.edu"></label>
+ <p class="hint" style="margin:0">Gene dossiers look genes up at NCBI, UniProt, KEGG and AlphaFold DB. NCBI asks that programs send a contact email so they can reach you before throttling heavy use; nothing else is sent.</p>
  <p class="hint" style="margin:0">The key is stored only on this computer (~/.rnaseq-bench/config.json) and is used solely for the assistant. Get one at console.anthropic.com.</p>
  <div class="row" style="justify-content:flex-end"><button class="btn" id="st_cancel">Cancel</button><button class="btn accent" id="st_save">Save</button></div></div>`;
  document.body.appendChild(m);m.querySelector("#st_cancel").onclick=()=>m.remove();m.onclick=e=>{if(e.target===m)m.remove()};
@@ -1359,9 +1401,64 @@ async function openSettings(){const cur=await (await fetch("/api/settings")).jso
  fetch("/api/models").then(r=>r.json()).then(j=>{fillModels(j.models,cur.model);m.querySelector("#st_msg").textContent=j.ok?"Key works.":(cur.has_key?"Key check failed: "+j.error:"")}).catch(()=>{});
  m.querySelector("#st_test").onclick=async()=>{const k=m.querySelector("#st_key").value.trim();const msg=m.querySelector("#st_msg");msg.textContent="Checking…";if(k){await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({api_key:k})});m.querySelector("#st_key").value="";m.querySelector("#st_key").placeholder="Saved — paste to replace"}
   const j=await (await fetch("/api/models")).json();fillModels(j.models,m.querySelector("#st_model").value);msg.textContent=j.ok?`Key works — ${j.models.length} models available.`:"Key check failed: "+(j.error||"no key")};
- m.querySelector("#st_save").onclick=async()=>{const body={model:m.querySelector("#st_model").value};const k=m.querySelector("#st_key").value.trim();if(k)body.api_key=k;const r=await (await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();toast(r.has_key?"Saved":"Saved (no API key yet)");m.remove()}}
+ m.querySelector("#st_save").onclick=async()=>{const body={model:m.querySelector("#st_model").value};const ne=m.querySelector("#st_ncbi").value.trim();if(ne)body.ncbi_email=ne;const k=m.querySelector("#st_key").value.trim();if(k)body.api_key=k;const r=await (await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();toast(r.has_key?"Saved":"Saved (no API key yet)");m.remove()}}
 $("#settingsBtn").onclick=e=>{e.preventDefault();openSettings()};
 $("#quitBtn").onclick=async e=>{e.preventDefault();if(!confirm("Stop RNAseq Bench? Finished analyses stay on disk; a running one would be lost."))return;await fetch("/api/quit",{method:"POST"}).catch(()=>{});document.body.innerHTML='<div style="font:15px system-ui;padding:60px;text-align:center;color:#6a7b84">RNAseq Bench has stopped. Double-click the app to start it again — you can close this tab.</div>'};
+
+/* gene dossier — click any gene in a table (or the explorer) to see what the databases say about it */
+const STRUCT_BENCH="http://localhost:8767";
+const AFC=[["VeryHigh","#0053D6","very high >90"],["Confident","#65CBF3","confident 70–90"],["Low","#FFDB13","low 50–70"],["VeryLow","#FF7D45","very low <50"]];
+const DZC=["#0f766e","#d97706","#3056a8","#c9304f","#7c3aed","#0891b2","#65a30d","#be185d"];
+let dzReq=0;
+function dzTrack(u){const L=u.length,D=(u.domains||[]).filter(x=>x.start&&x.end);if(!L||!D.length)return"";
+ const W=560,P=8,sx=v=>P+(v-1)/(L-1||1)*(W-2*P),lanes=[],types=[...new Set(D.map(x=>x.name))];
+ const boxes=D.map(x=>{let k=lanes.findIndex(end=>end<x.start);if(k<0){k=lanes.length;lanes.push(0)}lanes[k]=x.end+L*.06;return{...x,k}});
+ const H=30+lanes.length*20;
+ return `<svg class="dz-track" viewBox="0 0 ${W} ${H}" role="img" aria-label="Protein domains along the sequence"><line x1="${P}" x2="${W-P}" y1="10" y2="10" stroke="var(--muted)" stroke-width="1.2"/><text x="${P}" y="24">1</text><text x="${W-P}" y="24" text-anchor="end">${L} aa</text>`+
+  boxes.map(b=>{const x=sx(b.start),w=Math.max(3,sx(b.end)-x),y=30+b.k*20,c=DZC[types.indexOf(b.name)%DZC.length],fits=w>b.name.length*6+8;
+   return `<g><title>${esc(b.name)} (${esc(b.type)}) ${b.start}–${b.end}</title><rect x="${x}" y="${y}" width="${w}" height="15" rx="4" fill="${c}" fill-opacity=".85"/>${fits?`<text x="${x+4}" y="${y+11}" style="fill:#fff;font-weight:600">${esc(b.name)}</text>`:""}<line x1="${x}" x2="${x}" y1="10" y2="${y}" stroke="${c}" stroke-opacity=".35"/></g>`}).join("")+`</svg>`}
+function openDossier(gene,here,opt={}){
+ $$(".dossier,.scrim.dz").forEach(x=>x.remove());
+ const sp0=opt.species||(S.result&&S.result.summary&&S.result.summary.species)||"auto";
+ const scrim=el("div","scrim dz"),d=el("aside","drawer dossier");d.setAttribute("aria-label","Gene dossier for "+gene);
+ d.innerHTML=`<div class="dh"><h3>${esc(gene)}</h3><span class="nm">Gene dossier</span>
+  <select aria-label="Species"><option value="auto">auto</option><option value="human">human</option><option value="mouse">mouse</option><option value="rat">rat</option></select>
+  <button class="btn ghost sm" data-x aria-label="Close">✕</button></div><div class="db"></div>
+  <div class="df"><span class="sp"></span><button class="btn sm" data-r title="Fetch again instead of using the saved copy">Refresh</button><button class="btn sm accent" data-ask>Ask Claude</button></div>`;
+ document.body.append(scrim,d);
+ const kd=e=>{if(e.key==="Escape")close()},close=()=>{scrim.remove();d.remove();document.removeEventListener("keydown",kd)};
+ document.addEventListener("keydown",kd);scrim.onclick=close;d.querySelector("[data-x]").onclick=close;
+ const sel=d.querySelector("select");sel.value=["human","mouse","rat"].includes(sp0)?sp0:"auto";
+ const body=d.querySelector(".db"),foot=d.querySelector(".sp");let ctx="",sym=gene;
+ const sec=(t,url,lab,inner)=>`<div class="dz-sec"><h4>${esc(t)}${url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(lab)} ↗</a>`:""}</h4>${inner}</div>`;
+ const list=(a,lab)=>a&&a.length?`<h4 style="margin:12px 0 2px">${esc(lab)}</h4><ul class="dz-list">${a.map(x=>`<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a><small>${esc(x.authors)} · ${esc(x.journal)} ${esc(x.year)} · PMID ${esc(x.pmid)}</small></li>`).join("")}</ul>`:"";
+ function hereHTML(){const v=((here&&here.values)||[]).filter(([,x])=>x!==""&&x!=null).slice(0,6);if(!v.length)return"";
+  return `<div class="dz-sec"><h4>In this analysis <span style="text-transform:none;letter-spacing:0">· ${esc(here.title||"")}</span></h4><div class="dz-here">${v.map(([h,x])=>`<div><b>${esc(x)}</b><span>${esc(h)}</span></div>`).join("")}</div></div>`}
+ async function load(refresh){const my=++dzReq;
+  body.innerHTML=hereHTML()+`<div class="dz-sec"><h4>Looking ${esc(gene)} up</h4><p class="hint">Asking NCBI Gene, UniProt, KEGG, AlphaFold DB and PubMed…</p><div class="dz-skel"></div><div class="dz-skel" style="width:80%"></div><div class="dz-skel" style="width:55%"></div></div>`;foot.textContent="";
+  try{const r=await fetch(`/api/dossier/${encodeURIComponent(gene)}?species=${sel.value}&context=${encodeURIComponent(ctx)}${refresh?"&refresh=true":""}`);
+   const j=await r.json();if(my!==dzReq)return;if(!r.ok)throw new Error(j.detail||r.statusText);render(j)}
+  catch(e){if(my===dzReq)body.innerHTML=hereHTML()+`<div class="dz-sec"><div class="errbox">${esc(e.message)}</div></div>`}}
+ function render(j){const n=j.ncbi||{},u=j.uniprot||{},k=j.kegg,a=j.alphafold||{},p=j.pubmed;sym=j.symbol;
+  d.querySelector(".dh h3").textContent=j.symbol;d.querySelector(".nm").textContent=[n.name||u.name,j.organism].filter(Boolean).join(" · ");
+  if(sel.value==="auto")sel.value=j.species;
+  let h=hereHTML();
+  if(j.notes.length)h+=`<div class="dz-sec">${j.notes.map(x=>`<div class="dz-note"><span class="tag info">NOTE</span><div>${safe(x.text)}</div></div>`).join("")}</div>`;
+  if(n.found)h+=sec("Gene · NCBI",n.url,"NCBI Gene",`${n.summary?`<p class="clamp">${esc(n.summary)}</p>`:""}<div class="dz-meta">${n.location?`<span class="chip">chr ${esc(n.chromosome)} · ${esc(n.location)}</span>`:""}<span class="chip">Gene ID ${esc(n.gene_id)}</span>${(n.mim||[]).map(m=>`<a class="chip" href="https://omim.org/entry/${esc(m)}" target="_blank" rel="noopener">OMIM ${esc(m)}</a>`).join("")}${(n.aliases||[]).slice(0,8).map(x=>`<span class="chip" title="Alias">${esc(x)}</span>`).join("")}</div>`);
+  if(u.found)h+=sec(`Protein · UniProt ${u.accession}`,u.url,"UniProt",`${u.function?`<p class="clamp">${esc(u.function)}</p>`:`<p class="hint">UniProt has no function text for this entry.</p>`}${(u.locations||[]).length?`<div class="dz-meta">${u.locations.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}</div>`:""}${dzTrack(u)}${(u.diseases||[]).length?`<p style="margin-top:10px;font-size:12.5px"><b>Disease involvement (UniProt):</b> ${u.diseases.map(x=>esc(x.name)+(x.acronym?` (${esc(x.acronym)})`:"")).join("; ")}</p>`:""}`);
+  if(a.found){const fr=a.fractions||{};h+=sec("Predicted structure · AlphaFold",a.url,"AlphaFold DB",`<div class="dz-bar">${AFC.map(([key,c])=>`<i style="flex:${fr[key]||0};background:${c}"></i>`).join("")}</div><div class="dz-legend">${AFC.map(([key,c,l])=>`<span><i style="background:${c}"></i>${l}: ${Math.round(100*(fr[key]||0))}%</span>`).join("")}</div><p style="margin-top:8px">${esc(a.explain||"")}</p><div class="row" style="margin-top:10px"><a class="btn sm" data-sb href="${esc(j.structure_bench)}" target="_blank" rel="noopener">Open in Structure Bench</a>${u.n_pdb?`<span class="hint">${u.n_pdb} experimental structure${u.n_pdb>1?"s":""} in the PDB</span>`:`<span class="hint">no experimental structure in the PDB</span>`}</div>`)}
+  if(k)h+=sec("Pathways · KEGG",k.url,"KEGG",k.pathways.length?`<ul class="dz-list">${k.pathways.map(x=>`<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a><small>${esc(x.id)} · opens the map with ${esc(j.symbol)} highlighted</small></li>`).join("")}</ul>`:`<p class="hint">KEGG places ${esc(j.symbol)} in no specific pathway map.</p>`);
+  if(p)h+=sec("Papers · PubMed",p.url,"PubMed",`<p style="font-size:12.5px">${p.count.toLocaleString()} paper${p.count===1?"":"s"} match <code>${esc(p.query)}</code>.</p>${list(p.relevant,"Most relevant")}${list(p.newest,"Newest")}<div class="dz-ctx"><input aria-label="Narrow the papers" placeholder="Narrow with a term, e.g. fibroblast OR senescence" value="${esc(ctx)}"><button class="btn sm">Search</button></div>`);
+  body.innerHTML=h;
+  const ci=body.querySelector(".dz-ctx input");if(ci){const go=()=>{ctx=ci.value.trim();load(false)};body.querySelector(".dz-ctx button").onclick=go;ci.onkeydown=e=>{if(e.key==="Enter")go()}}
+  body.querySelectorAll("p.clamp").forEach(pp=>{if(pp.scrollHeight>pp.clientHeight+4){const b=el("button","dzlink","more");b.style.fontSize="12px";b.onclick=()=>{pp.classList.toggle("clamp");b.textContent=pp.classList.contains("clamp")?"more":"less"};pp.after(b)}});
+  const sb=body.querySelector("[data-sb]");
+  if(sb)sb.onclick=async e=>{e.preventDefault();try{await fetch(STRUCT_BENCH+"/api/settings",{mode:"no-cors"});window.open(sb.href,"_blank","noopener")}catch{toast("Structure Bench is not running — start it, then click again.")}};
+  foot.textContent=(j.cached?"Saved copy from ":"Fetched ")+new Date(j.fetched*1000).toLocaleDateString()+(j.cached?"":` in ${j.elapsed} s`)}
+ d.querySelector("[data-r]").onclick=()=>load(true);sel.onchange=()=>load(false);
+ d.querySelector("[data-ask]").onclick=()=>{const v=((here&&here.values)||[]).slice(0,3).map(([h,x])=>h+" "+x).join(", ");close();openChat();
+  $("#chatIn").value=`What is ${sym} and what might it mean that it comes up in this analysis${v?` (${v})`:""}? Use the gene dossier.`;$("#chatIn").focus()};
+ load(false)}
 
 /* assistant */
 const CONV=Math.random().toString(36).slice(2);

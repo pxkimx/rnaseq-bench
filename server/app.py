@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Str
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agent, bulk_pipeline, codegen, demo, geo, sc_pipeline
+from . import agent, bulk_pipeline, codegen, demo, dossier, geo, sc_pipeline
 from .common import Cancelled, Job, run_safely
 from .io_utils import guess_kind, unpack_archives
 
@@ -137,13 +137,15 @@ def source():
 class Settings(BaseModel):
     api_key: str | None = None
     model: str | None = None
+    ncbi_email: str | None = None
 
 
 @app.get("/api/settings")
 def get_settings():
     cfg = geo.load_settings()
     key = cfg.get("api_key") or os.environ.get("ANTHROPIC_API_KEY") or ""
-    return {"version": VERSION, "has_key": bool(key), "key_hint": (key[:7] + "…" + key[-4:]) if key else "", "model": cfg.get("model") or agent.DEFAULT_MODEL}
+    return {"version": VERSION, "has_key": bool(key), "key_hint": (key[:7] + "…" + key[-4:]) if key else "", "model": cfg.get("model") or agent.DEFAULT_MODEL,
+            "ncbi_email": cfg.get("ncbi_email") or ""}
 
 
 @app.post("/api/settings")
@@ -165,6 +167,17 @@ def quit_server():
 def list_models():
     """Models the saved key can use (also verifies the key). Falls back to a static list."""
     return agent.available_models()
+
+
+# ---------------------------------------------------------------- gene dossier
+@app.get("/api/dossier/{gene}")
+def gene_dossier(gene: str, species: str = "auto", context: str = "", refresh: bool = False):
+    """NCBI Gene, UniProt, KEGG, AlphaFold DB and PubMed for one gene. Sources that cannot be reached come back
+    as notes, so this only fails for a malformed request."""
+    try:
+        return dossier.build(gene, species, context, refresh)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 # ---------------------------------------------------------------- agent
@@ -263,6 +276,7 @@ def result(jid: str):
         raise HTTPException(404, "Result not ready")
     r = json.loads(p.read_text())
     r["job"] = jid
+    r["report_name"] = report_name(jid)
     return JSONResponse(r)
 
 
@@ -340,13 +354,30 @@ def gene(jid: str, gene: str):
     return {"gene": g, "values": np.round(v, 3).tolist(), "cluster_means": means, "pct_expressing": float((v > 0).mean())}
 
 
+def report_name(jid: str) -> str:
+    """date_toolname_report — e.g. 2026-09-23_RNAseqBench-SingleCell_report.pdf. The date is the day the analysis
+    ran (its request.json is written when it starts), so a report downloaded again later keeps the date of its contents."""
+    import time as _time
+    d = JOBS / jid
+    try:
+        req = d / "request.json"
+        kind = json.loads(req.read_text()).get("kind")
+        st = req.stat()
+        t = getattr(st, "st_birthtime", st.st_mtime)   # creation time: the assistant can rewrite request.json later
+    except Exception:  # noqa: BLE001
+        kind, t = None, _time.time()
+    tool = {"sc": "SingleCell", "bulk": "Bulk"}.get(kind, "Analysis")
+    return f"{_time.strftime('%Y-%m-%d', _time.localtime(t))}_RNAseqBench-{tool}_report.pdf"
+
+
 @app.get("/api/jobs/{jid}/files/{path:path}")
 def files(jid: str, path: str):
     p = (JOBS / jid / path).resolve()
     if not str(p).startswith(str((JOBS / jid).resolve())) or not p.exists():
         raise HTTPException(404)
     dl = p.suffix in (".pdf", ".h5ad", ".csv")
-    return FileResponse(p, filename=p.name if dl else None)
+    name = report_name(jid) if path == "report.pdf" else p.name
+    return FileResponse(p, filename=name if dl else None)
 
 
 app.mount("/", StaticFiles(directory=ROOT / "web", html=True), name="web")

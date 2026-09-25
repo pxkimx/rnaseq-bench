@@ -8,7 +8,8 @@ Owner: Paul (biologist, learning the analyses — explain the *why* in plain lan
   sample-level tests · `server/sc_extra.py` / `server/bulk_extra.py` expert add-ons (v3.2) · `server/resources.py`
   cached downloads (gene sets, PROGENy, CollecTRI, CellTypist models) · `server/io_utils.py` readers · `server/geo.py`
   GEO + Ensembl · `server/agent.py` assistant tools · `server/codegen.py` reproducible script · `server/report.py` PDF ·
-  `server/selftest.py` · `web/index.html` the whole UI (single file) · `launch.sh` Mac launcher · `tests/` harness.
+  `server/dossier.py` gene dossier (Biopython Entrez/UniProt/KEGG/alphafold_db; `/api/dossier/{gene}`, agent tool
+  `gene_dossier`, UI `openDossier()`) · `server/selftest.py` · `web/index.html` the whole UI (single file) · `launch.sh` Mac launcher · `tests/` harness.
 - Job output: `TL_HOME/jobs/<id>/` (result.json drives the UI; figures/*.png; CSVs). `TL_HOME` = ~/Library/Application Support/RNAseqBench.
 - Every figure goes through `job.figure(id, title, fig, how=, yours=)`; sections via `job.section`. Keep that contract —
   the UI, PDF report and agent all read result.json.
@@ -43,6 +44,12 @@ page says so. Deploys to Cloudflare Pages as static assets.
 - Non-fatal errors: wrap in try/except and call `log_exc("where")` so the traceback lands in the server log.
 - DESeq2: reference level must be first in the Categorical (else lfc_shrink silently does nothing).
 - Cells are not replicates: single-cell DE between conditions is pseudobulk per sample.
+- Gene dossier: every source runs under `guarded` + a 25 s `DEADLINE` (Entrez and alphafold_db open URLs with no
+  timeout; Entrez retries 3× 15 s by default — set to 2× 2 s). Only complete dossiers are cached
+  (`~/.rnaseq-bench/dossier/`). KEGG gene ids for hsa/mmu/rno are NCBI Gene ids (Biopython's `kegg_conv`
+  rejects `ncbi-geneid` sources). `python tests/test_dossier.py` checks the offline/hung paths without network.
+- Sister apps: MassSpec Bench :8766, Structure Bench :8767 (dossier links to `#uniprot=` / `#gene=&species=`),
+  Clone Bench :8768.
 - Mac app runs `launch.sh` (arm64 re-exec guard, venv rebuild guard, requirements hash → reinstall).
 
 ## v3.2 status (shipped 3.2.0; 3.2.1 is the real-data / packaged-app fix round)

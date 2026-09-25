@@ -64,6 +64,10 @@ run_python should be saved as a PNG in the job folder and mentioned by file name
 Each result carries a params_panel: every choice the pipeline made, the value it used, where that value came
 from (auto / user / default) and a plain-language reason. Read it before you discuss or change a parameter, and
 point the user at the Parameters section of the report rather than restating all of it.
+When the user asks what a gene is or does, or why it might change, call gene_dossier: it returns the NCBI
+summary, UniProt function and domains, KEGG pathways, AlphaFold confidence and PubMed papers for that gene.
+Cite papers only by the PMIDs it returns — never cite a paper from memory. Connect the gene back to the
+analysis (its fold change, where it is expressed) rather than reciting the database text.
 Never invent results — read them with the tools. Keep answers short unless asked for depth."""
 
 TOOLS = [
@@ -98,6 +102,13 @@ TOOLS = [
      "input_schema": {"type": "object", "properties": {"job": {"type": "string"}, "code": {"type": "string"}, "timeout": {"type": "integer"}}, "required": ["job", "code"]}},
     {"name": "generate_script", "description": "Return the standalone Python script that reproduces a job.",
      "input_schema": {"type": "object", "properties": {"job": {"type": "string"}}, "required": ["job"]}},
+    {"name": "gene_dossier", "description": (
+         "What public databases say about one gene (needs internet; parts that cannot be reached come back as notes): "
+         "NCBI Gene name and RefSeq summary, UniProt function / localisation / domains / diseases, KEGG pathways, "
+         "AlphaFold model confidence, and PubMed papers (count, most relevant, newest). species: human, mouse, rat "
+         "or auto (from the symbol's case). context: optional PubMed terms to narrow the papers, e.g. 'fibroblast'."),
+     "input_schema": {"type": "object", "properties": {"gene": {"type": "string"}, "species": {"type": "string"},
+                                                       "context": {"type": "string"}}, "required": ["gene"]}},
 ]
 
 
@@ -126,6 +137,9 @@ def run_tool(name: str, inp: dict, start_rerun) -> str:
                 st = json.loads((d / "status.json").read_text()) if (d / "status.json").exists() else {}
                 rows.append({"job": d.name, "kind": req.get("kind"), "name": req.get("name"), "state": st.get("state"), "message": st.get("message")})
             return json.dumps(rows)
+        if name == "gene_dossier":
+            from .dossier import build, compact
+            return json.dumps(compact(build(inp["gene"], inp.get("species") or "auto", inp.get("context") or "")))[:20000]
         job = _job_dir(inp["job"])
         if name == "get_result":
             r = json.loads((job / "result.json").read_text())

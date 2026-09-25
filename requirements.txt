@@ -27,6 +27,7 @@ uvicorn[standard]>=0.29
 python-multipart>=0.0.9
 anthropic>=0.40
 certifi>=2024
+biopython>=1.88          # gene dossier: Entrez (NCBI Gene, PubMed), UniProt, KEGG REST, AlphaFold DB
 
 # --- optional: expert add-ons -------------------------------------------------
 # Everything below is used only by add-on analyses that already degrade to an [info] note when the

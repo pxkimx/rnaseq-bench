@@ -63,6 +63,12 @@ account appears as an appendix in the PDF.
 parameters, write a corrected metadata file, run Python inside the job folder (custom plots, extra
 statistics), and hand you the reproducible script. Tool calls are shown in the chat as expandable cards.
 
+**Gene dossier** — click any gene in a result table (or the gene shown in the UMAP explorer) for what the
+databases say about it: NCBI Gene summary, UniProt function, domains and disease involvement, KEGG pathways,
+AlphaFold model confidence and PubMed papers, with the clicked row's fold change kept in view. Needs internet;
+each source degrades to a note on its own, and complete dossiers are cached for two weeks. Links to
+**Structure Bench** (localhost:8767) to open the protein in 3D.
+
 **View code** — every analysis has a `reproduce_analysis.py` written with plain Scanpy / PyDESeq2 calls
 and the parameters used; the same viewer shows the pipeline source itself.
 
@@ -83,6 +89,7 @@ server/bulk_pipeline.py  bulk analysis        server/codegen.py     reproducible
 server/sc_pipeline.py    single-cell          server/geo.py         GEO + Ensembl helpers
 server/pseudobulk.py     sample-level tests   server/io_utils.py    readers, replicates, sex, ID mapping
 server/report.py         PDF                  web/index.html        UI
+server/dossier.py        gene dossier (Biopython: Entrez, UniProt, KEGG, AlphaFold DB)
 ```
 
 ## Caveats

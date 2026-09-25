@@ -1,5 +1,38 @@
 # RNAseq Bench changelog
 
+## 3.9.0
+- **Click a gene, see what it is.** Every gene name in a result table — markers, DESeq2, pseudobulk, genes of
+  interest — and the gene shown in the UMAP explorer now opens a dossier beside the results. It shows:
+  - the row you clicked, so the fold change and adjusted p stay in view;
+  - NCBI Gene: name, location, aliases, RefSeq summary;
+  - UniProt: function, localisation, a domain map, disease involvement;
+  - KEGG pathways, each linking to the map with the gene highlighted;
+  - AlphaFold: how much of the predicted structure is confident, with a plain reading of what the rest means;
+  - PubMed: the paper count, the most relevant and the newest papers, and a box to narrow them with a term
+    such as your tissue.
+
+  It is built on Biopython (Entrez, UniProt, KEGG REST, alphafold_db). Everything is looked up live and nothing
+  from your analysis is sent — only the gene symbol.
+- **Each database stands alone.** One that cannot be reached, or does not answer within 25 s, becomes a note
+  naming it, and the others still show. Biopython's own Entrez default is three tries 15 s apart with no
+  timeout, which offline meant nearly a minute of spinner, so the dossier now uses one quick retry and a
+  deadline. A complete dossier is kept for two weeks, so reopening a gene is instant and works offline. A
+  partial one is not kept, so the missing parts are tried again next time.
+- **It says what it matched.** An alias resolves to the official symbol and says so (HGPS → LMNA). Mouse
+  symbols are recognised by their case (Lmna), and the species can be switched. A non-coding gene says it has
+  no UniProt entry rather than showing an empty panel. A heavily cited symbol suggests narrowing the paper
+  search, and warns when the symbol is also an ordinary word.
+- **Open in Structure Bench.** The AlphaFold section links to Structure Bench, the new sister app, which opens
+  the same protein in 3D and maps variants onto it. It checks first that the app is running, and says so
+  when it is not.
+- The assistant has a `gene_dossier` tool. It may cite only the PMIDs that tool returns, never a paper from
+  memory.
+- Settings has an optional email for NCBI, which asks programs to identify themselves.
+- **Reports download with a dated name:** `date_toolname_report`, for example
+  `2026-09-23_RNAseqBench-SingleCell_report.pdf` or `…_RNAseqBench-Bulk_report.pdf`. The date is the day the analysis ran,
+  so a report saved again later still carries the date of what it shows. It used to be `report.pdf` every time, which
+  collided in Downloads and said nothing about what it was.
+
 ## 3.8.1
 - **The web version reports QC properly.** matplotlib runs in Pyodide, so it now draws the same figures the
   desktop app does: violins of genes, counts and mitochondrial percent with the cut-offs marked and removed
