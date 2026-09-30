@@ -1,6 +1,7 @@
 """RNAseq Bench web server.  Run:  uvicorn server.app:app --port 8765"""
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import threading
@@ -9,12 +10,12 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agent, bulk_pipeline, codegen, demo, dossier, geo, sc_pipeline
+from . import agent, bulk_pipeline, codegen, demo, dossier, geo, lifecycle, sc_pipeline
 from .common import Cancelled, Job, run_safely
 from .io_utils import guess_kind, unpack_archives
 
@@ -25,6 +26,7 @@ VERSION = (ROOT / "VERSION").read_text().strip() if (ROOT / "VERSION").exists() 
 app = FastAPI(title="RNAseq Bench", version=VERSION)
 print(f"RNAseq Bench {VERSION} — jobs in {JOBS} — python {__import__('platform').python_version()}", flush=True)
 _lock = threading.Semaphore(1)  # one heavy analysis at a time
+lifecycle.start()  # the server stops when the last page is closed, or when the launcher is gone
 
 
 def _start(kind: str, files: list[Path], name: str, params: dict, job_dir: Path):
@@ -157,9 +159,39 @@ def set_settings(body: Settings):
 
 @app.post("/api/quit")
 def quit_server():
-    """Stop the server (sidebar 'Quit'). Runs jobs are lost, finished ones stay on disk."""
-    import threading as _t
-    _t.Timer(0.5, lambda: os._exit(0)).start()
+    """Stop the server (sidebar 'Quit'). Running jobs are lost, finished ones stay on disk."""
+    threading.Timer(0.5, lambda: lifecycle.quit_now("asked to quit")).start()
+    return {"ok": True}
+
+
+# Closing the window closes the app. An open page holds the connection below, which drops the moment
+# the window goes away even if the browser closes the tab without telling the page; it also sends a
+# heartbeat, and says so on the way out when it gets the chance. See server/lifecycle.py for the rule.
+@app.get("/api/window")
+async def window_channel(request: Request, page: str = ""):
+    """Held open for as long as a page is open. Nothing is sent over it but keep-alives."""
+    async def stream():
+        token = lifecycle.window_opened(page)
+        try:
+            while not await request.is_disconnected():
+                yield b": open\n\n"
+                await asyncio.sleep(lifecycle.CHECK_S)
+        finally:
+            lifecycle.window_closed(token)
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/alive")
+def page_alive(page: str = ""):
+    lifecycle.ping(page or "page")
+    return {"ok": True}
+
+
+@app.post("/api/closing")
+def page_closing(page: str = ""):
+    lifecycle.closing(page or "page")
     return {"ok": True}
 
 

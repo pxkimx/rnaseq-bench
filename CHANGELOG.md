@@ -1,6 +1,20 @@
 # RNAseq Bench changelog
 
 ## 3.9.0
+- **RNAseq Bench quits when you close it.** Closing its window — the browser tab it runs in — stops the
+  server a few seconds later, and quitting it in the Dock stops it at once. Nothing is left listening on
+  port 8765 and no analysis is left running. Reloading the page does not stop it. Before this, the app kept
+  running after its window was closed and had to be stopped from the sidebar or with
+  "Stop RNAseq Bench.command", which is how a Mac ended up with idle copies of it.
+
+  How it knows (`server/lifecycle.py`): the open page holds a connection to the server that drops the moment
+  the window goes away, and sends a heartbeat besides. Six seconds with nothing connected after such a drop
+  and the server stops; three minutes with nothing connected at all covers a browser that crashed. The
+  launcher now stays alive alongside the server, so the app is a real entry in the Dock and the server stops
+  when the launcher is killed — which is what quitting from the Dock does, with a signal no script can catch.
+  An analysis in progress now warns you before you close the window.
+
+### Earlier in 3.9.0
 - **Click a gene, see what it is.** Every gene name in a result table — markers, DESeq2, pseudobulk, genes of
   interest — and the gene shown in the UMAP explorer now opens a dossier beside the results. It shows:
   - the row you clicked, so the fold change and adjusted p stay in view;

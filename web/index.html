@@ -460,7 +460,7 @@ ol.flow .why{margin:0;font-size:13px;line-height:1.55;color:var(--muted);border-
       </div>
       <a href="#" id="codeBtn"><i>&lt;/&gt;</i>View code</a>
       <a href="#" id="settingsBtn"><i>⚙</i>Settings &amp; API key</a>
-      <a href="#" id="quitBtn" title="Stop the local server (finished analyses stay on disk)"><i>⏻</i>Quit RNAseq Bench</a>
+      <a href="#" id="quitBtn" title="Stop the local server now (it also stops on its own when you close this window)"><i>⏻</i>Quit RNAseq Bench</a>
     </nav></div>
     <div class="foot">
       <button class="btn ghost sm" id="themeBtn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
@@ -1403,7 +1403,7 @@ async function openSettings(){const cur=await (await fetch("/api/settings")).jso
   const j=await (await fetch("/api/models")).json();fillModels(j.models,m.querySelector("#st_model").value);msg.textContent=j.ok?`Key works — ${j.models.length} models available.`:"Key check failed: "+(j.error||"no key")};
  m.querySelector("#st_save").onclick=async()=>{const body={model:m.querySelector("#st_model").value};const ne=m.querySelector("#st_ncbi").value.trim();if(ne)body.ncbi_email=ne;const k=m.querySelector("#st_key").value.trim();if(k)body.api_key=k;const r=await (await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();toast(r.has_key?"Saved":"Saved (no API key yet)");m.remove()}}
 $("#settingsBtn").onclick=e=>{e.preventDefault();openSettings()};
-$("#quitBtn").onclick=async e=>{e.preventDefault();if(!confirm("Stop RNAseq Bench? Finished analyses stay on disk; a running one would be lost."))return;await fetch("/api/quit",{method:"POST"}).catch(()=>{});document.body.innerHTML='<div style="font:15px system-ui;padding:60px;text-align:center;color:#6a7b84">RNAseq Bench has stopped. Double-click the app to start it again — you can close this tab.</div>'};
+$("#quitBtn").onclick=async e=>{e.preventDefault();if(!confirm("Stop RNAseq Bench? Finished analyses stay on disk; a running one would be lost."))return;pageAlive=false;await fetch("/api/quit",{method:"POST"}).catch(()=>{});document.body.innerHTML='<div style="font:15px system-ui;padding:60px;text-align:center;color:#6a7b84">RNAseq Bench has stopped. Double-click the app to start it again — you can close this tab.</div>'};
 
 /* gene dossier — click any gene in a table (or the explorer) to see what the databases say about it */
 const STRUCT_BENCH="http://localhost:8767";
@@ -1491,6 +1491,20 @@ async function send(){const t=$("#chatIn").value.trim();if(!t||S.chatBusy)return
 $("#chatSend").onclick=send;$("#chatIn").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
 function watchJob(job){const t=setInterval(async()=>{const s=await (await fetch(`/api/jobs/${job}/status`)).json();if(s.state==="done"){clearInterval(t);loadResult(job);toast("Re-run finished")}else if(s.state==="error"){clearInterval(t);toast("Re-run failed: "+(s.error||""))}},1500)}
 function refreshFigures(){}
+
+/* This window is the app. Say we are here every few seconds, and say so when we go away, so that
+   closing the tab or window closes the app too (the rule is in server/lifecycle.py). A reload
+   registers again well inside the six seconds the server waits, so reloading does not quit it. */
+const PAGE_ID=(self.crypto&&crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2));
+let pageAlive=true;
+const pingServer=()=>{if(pageAlive)fetch("/api/alive?page="+PAGE_ID,{method:"POST"}).catch(()=>{})};
+pingServer();setInterval(pingServer,3000);
+/* and hold a connection open: it drops the instant this window goes away, which is the one signal a
+   browser cannot withhold — some close a tab without ever firing the event below. */
+const windowChannel=new EventSource("/api/window?page="+PAGE_ID);
+addEventListener("pagehide",e=>{if(e.persisted)return;pageAlive=false;navigator.sendBeacon("/api/closing?page="+PAGE_ID)});
+/* closing this window now really does stop the app, so an analysis in progress is worth a warning */
+addEventListener("beforeunload",e=>{if(S.runJob){e.preventDefault();e.returnValue=""}});
 
 /* boot */
 syncForms();renderRecent();sideRecent();

@@ -5,10 +5,11 @@ cd "$(dirname "$0")"
 VENV="$HOME/Library/Application Support/RNAseqBench/venv"
 [ -x "$VENV/bin/python" ] || VENV=".venv"
 [ -x "$VENV/bin/python" ] || { echo "no environment yet — launch the app once (or: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)"; exit 1; }
+export RB_NO_AUTOQUIT=1   # a development server stays up when no browser tab is open
 export TL_HOME="${TL_HOME:-$HOME/Library/Application Support/RNAseqBench}"
 PORT="${PORT:-8765}"
 if curl -s -m 1 "http://localhost:$PORT/api/settings" >/dev/null 2>&1; then
-  echo "stopping the server already on :$PORT"; curl -s -X POST "http://localhost:$PORT/api/quit" >/dev/null; sleep 1; lsof -ti tcp:"$PORT" | xargs kill 2>/dev/null
+  echo "stopping the server already on :$PORT"; curl -s -X POST "http://localhost:$PORT/api/quit" >/dev/null; sleep 1; lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | xargs kill 2>/dev/null
 fi
 echo "http://localhost:$PORT  (auto-reloads when server/ or web/ change; Ctrl+C to stop)"
 exec "$VENV/bin/python" -m uvicorn server.app:app --port "$PORT" --reload --reload-dir server --reload-dir web

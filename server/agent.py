@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import textwrap
@@ -13,6 +14,7 @@ import uuid
 from pathlib import Path
 from typing import Iterator
 
+from . import lifecycle
 from .geo import load_settings
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -184,10 +186,20 @@ def run_tool(name: str, inp: dict, start_rerun) -> str:
         if name == "run_python":
             before = {p.name for p in job.iterdir()}
             code = inp["code"]
-            proc = subprocess.run([sys.executable, "-c", code], cwd=job, capture_output=True, text=True,
-                                  timeout=int(inp.get("timeout") or 180), env={**os.environ, "MPLBACKEND": "Agg"})
+            # its own process group, registered with the lifecycle watcher: if the app is closed while
+            # this is running, the script and anything it started are killed with it rather than left behind
+            proc = subprocess.Popen([sys.executable, "-c", code], cwd=job, text=True, start_new_session=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    env={**os.environ, "MPLBACKEND": "Agg"})
+            lifecycle.register_child(proc)
+            try:
+                stdout, stderr = proc.communicate(timeout=int(inp.get("timeout") or 180))
+            except subprocess.TimeoutExpired:
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.communicate()
+                raise
             new = sorted({p.name for p in job.iterdir()} - before)
-            out = (proc.stdout[-8000:] + ("\n[stderr]\n" + proc.stderr[-4000:] if proc.stderr.strip() else ""))
+            out = (stdout[-8000:] + ("\n[stderr]\n" + stderr[-4000:] if stderr.strip() else ""))
             return out + (f"\n[new files] {', '.join(new)}" if new else "") + f"\n[exit {proc.returncode}]"
         return f"unknown tool {name}"
     except subprocess.TimeoutExpired:

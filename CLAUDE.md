@@ -50,7 +50,18 @@ page says so. Deploys to Cloudflare Pages as static assets.
   rejects `ncbi-geneid` sources). `python tests/test_dossier.py` checks the offline/hung paths without network.
 - Sister apps: MassSpec Bench :8766, Structure Bench :8767 (dossier links to `#uniprot=` / `#gene=&species=`),
   Clone Bench :8768.
-- Mac app runs `launch.sh` (arm64 re-exec guard, venv rebuild guard, requirements hash → reinstall).
+- Mac app runs `launch.sh` (arm64 re-exec guard, venv rebuild guard, requirements hash → reinstall). In gui
+  mode the launcher **waits on the server** so the app is a real Dock entry; do not put it back in the
+  background.
+- Quitting (`server/lifecycle.py`, `tests/test_lifecycle.py`): closing the window stops the app. The page
+  holds `GET /api/window` (SSE) and posts `/api/alive` every 3 s; the dropped connection is the signal that
+  counts — the browser pane closes tabs without firing `pagehide`, so the `sendBeacon` on `/api/closing` is
+  a fallback, not the mechanism. Six seconds with nobody connected after a drop → quit; three minutes with
+  nobody connected at all → quit; launcher pid (`RB_LAUNCHER_PID`) gone → quit. `RB_NO_AUTOQUIT=1` (dev.sh)
+  turns it off. Two traps for anyone touching this: a page's heartbeat must be dropped with its channel
+  (`window_closed`), or the next check clears the "closing" flag and the six seconds become three minutes;
+  and find a server with `lsof -nP -iTCP:$PORT -sTCP:LISTEN -t`, never `lsof -ti tcp:$PORT`, which also
+  matches the browser's own end of the connection — the app would refuse to start, or kill the browser.
 
 ## v3.2 status (shipped 3.2.0; 3.2.1 is the real-data / packaged-app fix round)
 Shipped and tested on the synthetic datasets in `tests/`: bulk GSEA prerank, PROGENy/CollecTRI activity
