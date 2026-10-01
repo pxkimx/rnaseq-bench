@@ -1,5 +1,16 @@
 # RNAseq Bench changelog
 
+## 3.9.2 — 2026-10-01
+- **Fixed: a running analysis could report an error it had not had.** Each step rewrote `status.json`
+  in place, truncating it before writing, while the page polled that file every 1.5 s and the
+  assistant read it directly — so a poll could catch it empty and fail. Measured here, a plain write
+  was caught half written on **7% of reads** (3,192 of 44,580) under load. Job files are now written
+  beside the original and renamed over it, which is atomic, so a reader always gets one complete
+  version or the other: 0 torn reads out of 76,783. This covers `status.json`, `result.json` and
+  `request.json`. Found by the MassSpec Bench session, which hit it as a 500 mid-analysis.
+- The one place that polled a re-run's progress without checking the reply now retries instead of
+  giving up, so a poll that does not arrive is no longer reported as a failed re-run.
+
 ## 3.9.1 — 2026-10-01
 - **Fixed: pathway and transcription-factor activity was wrong on mouse data.** Mouse gene symbols were
   upper-cased before being scored against PROGENy and CollecTRI, but those networks are themselves

@@ -1498,7 +1498,8 @@ async function send(){const t=$("#chatIn").value.trim();if(!t||S.chatBusy)return
  catch(e){cur.innerHTML=`<p style="color:var(--warn)">${esc(e.message)}</p>`}
  S.chatBusy=false;$("#chatHint").textContent=""}
 $("#chatSend").onclick=send;$("#chatIn").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
-function watchJob(job){const t=setInterval(async()=>{const s=await (await fetch(`/api/jobs/${job}/status`)).json();if(s.state==="done"){clearInterval(t);loadResult(job);toast("Re-run finished")}else if(s.state==="error"){clearInterval(t);toast("Re-run failed: "+(s.error||""))}},1500)}
+function watchJob(job){const t=setInterval(async()=>{try{const r=await fetch(`/api/jobs/${job}/status`);if(!r.ok)return;const s=await r.json();
+ if(s.state==="done"){clearInterval(t);loadResult(job);toast("Re-run finished")}else if(s.state==="error"){clearInterval(t);toast("Re-run failed: "+(s.error||""))}}catch{/* a poll that does not arrive is not a failed re-run: try again in 1.5 s */}},1500)}
 function refreshFigures(){}
 
 /* This window is the app. Say we are here every few seconds, and say so when we go away, so that

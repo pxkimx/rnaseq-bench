@@ -50,6 +50,10 @@ page says so. Deploys to Cloudflare Pages as static assets.
   rejects `ncbi-geneid` sources). `python tests/test_dossier.py` checks the offline/hung paths without network.
 - Sister apps: MassSpec Bench :8766, Structure Bench :8767 (dossier links to `#uniprot=` / `#gene=&species=`),
   Clone Bench :8768.
+- Job files other processes read while an analysis runs (`status.json`, `result.json`, `request.json`) go
+  through `common.write_json`, which writes a neighbour and `os.replace`s it. A plain `write_text`
+  truncates first and was caught half written on 7% of reads under load (`tests/test_job_files.py`, which
+  keeps a control case so a plain write cannot creep back in).
 - Gene-symbol case, two opposite rules (3.9.1, `resources.match_case`): **decoupler networks** (PROGENy,
   CollecTRI) use each organism's own spelling — mouse `Tmprss2` — so translate the data into the network's
   case; never upper-case mouse for these. **Enrichr gene-set libraries** are upper-case for every organism,

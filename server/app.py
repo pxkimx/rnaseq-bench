@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import agent, bulk_pipeline, codegen, demo, dossier, geo, lifecycle, sc_pipeline
-from .common import Cancelled, Job, run_safely
+from .common import Cancelled, Job, run_safely, write_json
 from .io_utils import guess_kind, unpack_archives
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,7 +31,7 @@ lifecycle.start()  # the server stops when the last page is closed, or when the 
 
 def _start(kind: str, files: list[Path], name: str, params: dict, job_dir: Path):
     job = Job(job_dir, kind, name)
-    (job_dir / "request.json").write_text(json.dumps({"kind": kind, "name": name, "params": params, "files": [str(f) for f in files]}))
+    write_json(job_dir / "request.json", {"kind": kind, "name": name, "params": params, "files": [str(f) for f in files]})
 
     def work():
         with _lock:
@@ -109,7 +109,7 @@ def geo_import(body: GeoImport):
             files = geo.download_geo_files(body.urls, d / "input", progress=progress)
             files = unpack_archives(files, d / "input")
             k = guess_kind(files) if body.kind == "auto" else body.kind
-            (d / "request.json").write_text(json.dumps({"kind": k, "name": body.accession.upper(), "params": body.params, "files": [str(f) for f in files]}))
+            write_json(d / "request.json", {"kind": k, "name": body.accession.upper(), "params": body.params, "files": [str(f) for f in files]})
             job2 = Job(d, k, body.accession.upper())
             with _lock:
                 run_safely(job2, sc_pipeline.run if k == "sc" else bulk_pipeline.run, files, body.params)
@@ -298,7 +298,12 @@ def status(jid: str):
     p = JOBS / jid / "status.json"
     if not p.exists():
         raise HTTPException(404, "Unknown job")
-    return JSONResponse(json.loads(p.read_text()))
+    try:
+        return JSONResponse(json.loads(p.read_text()))
+    except json.JSONDecodeError:
+        # status.json is written atomically (common.write_json), so this should not happen; if it
+        # somehow does, the page should poll again rather than see the analysis fail
+        return JSONResponse({"state": "running", "pct": 0, "message": "…"})
 
 
 @app.get("/api/jobs/{jid}/result")

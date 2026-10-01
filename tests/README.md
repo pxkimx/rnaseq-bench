@@ -12,6 +12,7 @@ python tests/mock_geo_server.py mock_geo    # fake ftp.ncbi.nlm.nih.gov listing 
 python tests/fake_agent_test.py             # agent tool loop with a scripted fake Anthropic client
 python tests/test_lifecycle.py              # when the app quits: closed window, reload, dead launcher, child processes
 python tests/test_activity_case.py          # PROGENy/CollecTRI score the whole network whatever case the symbols use
+python tests/test_job_files.py              # status.json is never caught half written by a poll
 python -m server.selftest                   # what "Run self-test.command" runs
 ```
 Tested with fresh virtualenvs on Python 3.10 and 3.12 (see requirements.txt header).

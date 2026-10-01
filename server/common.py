@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 import traceback
 from pathlib import Path
@@ -10,6 +11,20 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+
+def write_json(path: Path, data, **dumps) -> None:
+    """Write a job file that other processes read while the analysis is still running.
+
+    status.json is rewritten at every step and the page polls it every 1.5 s, so a plain write_text —
+    which truncates the file before writing it — lets a reader catch it empty or half written and fail
+    on it. Writing a neighbour and renaming it over the original means a reader always opens one
+    complete version or the other: a rename within a directory is atomic, and a reader that already
+    has the old file open keeps reading it to the end.
+    """
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, **dumps))
+    os.replace(tmp, path)
+
 
 PALETTE = [
     "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2",
@@ -57,7 +72,7 @@ class Job:
             s["error"] = error
         if trace:
             s["trace"] = trace
-        (self.root / "status.json").write_text(json.dumps(s))
+        write_json(self.root / "status.json", s)
 
     def step(self, pct, msg):
         # Every step is a chance to stop. Cancellation is cooperative rather than a killed thread:
@@ -121,7 +136,7 @@ class Job:
 
     def save(self):
         self.result["sections"] = [s for s in self.result["sections"] if s.get("items")]   # drop sections that ended up empty
-        (self.root / "result.json").write_text(json.dumps(self.result, default=_json_default))
+        write_json(self.root / "result.json", self.result, default=_json_default)
 
 
 def _json_default(o):

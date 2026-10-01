@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Iterator
 
 from . import lifecycle
+from .common import write_json
 from .geo import load_settings
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -175,7 +176,7 @@ def run_tool(name: str, inp: dict, start_rerun) -> str:
             req = json.loads((job / "request.json").read_text())
             if str(p) not in req["files"]:
                 req["files"].append(str(p))
-                (job / "request.json").write_text(json.dumps(req))
+                write_json(job / "request.json", req)
             return f"wrote {p.relative_to(job)} ({len(inp['content'])} chars) and added it to the job's input files"
         if name == "rerun_analysis":
             new = start_rerun(job.name, inp.get("params") or {})
