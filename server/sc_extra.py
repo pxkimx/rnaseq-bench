@@ -241,11 +241,15 @@ def pathway_activity(job: Job, adata, species: str, group_key: str = "cell_type_
         X = b.X
         means = pd.DataFrame({g: np.asarray(X[(groups == g).values].mean(axis=0)).ravel() for g in pd.unique(groups)}, index=b.var_names).T
         means = means - means.mean(axis=0)
-        means.columns = means.columns.astype(str)
-        if species == "mouse":
-            means.columns = means.columns.str.upper()
+        means.columns = resources.match_case(means.columns.astype(str), net)
         means = means.loc[:, ~means.columns.duplicated()]
         es, pv = dc.mt.ulm(data=means, net=net, tmin=5)
+        got, total = resources.coverage(es, net)
+        if got < total / 2:
+            # this used to pass silently on mouse data with one or two pathways out of fourteen,
+            # which reads like a result rather than like a failure
+            job.flag("warn", f"Pathway activity: only {got} of {total} PROGENy pathways could be scored — too few of their "
+                             "genes are in your matrix. Usually the gene IDs are not symbols, or the species was mis-detected.")
         es.to_csv(job.root / "pathway_activity_by_cluster.csv")
         job.download("Pathway activity by cluster (.csv)", "pathway_activity_by_cluster.csv")
         fig, ax = plt.subplots(figsize=(max(5, 0.5 * es.shape[0] + 3), 4.8))

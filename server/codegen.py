@@ -448,14 +448,29 @@ fig.tight_layout(); fig.savefig("gsea.png", dpi=200)
 # factor from its known targets (CollecTRI), rather than from the expression of its own members.
 import decoupler as dc
 stat = res["stat"].dropna()
-stat.index = stat.index.astype(str).str.upper() if MOUSE else stat.index.astype(str)
+stat.index = stat.index.astype(str)
 stat = stat[~stat.index.duplicated()]
 mat = pd.DataFrame([stat.values], index=["{alt} vs {ref}"], columns=stat.index)
 organism = "mouse" if MOUSE else "human"
 progeny = dc.op.progeny(organism=organism, top=500)
 collectri = dc.op.collectri(organism=organism)
+
+# These networks use each organism's own spelling (human TMPRSS2, mouse Tmprss2) and a count table may
+# use either, so translate your gene names into the network's case. Do not upper-case them for mouse:
+# the mouse networks are mouse-case, so almost nothing would match. (Enrichr's gene-set libraries above
+# are the opposite — upper-case for every organism — which is why the GSEA step does upper-case them.)
+def for_net(df, net):
+    lut = {{}}
+    for t in net["target"].astype(str):
+        lut.setdefault(t.upper(), t)
+    d = df.copy()
+    d.columns = [lut.get(str(c).upper(), str(c)) for c in d.columns]
+    return d.loc[:, ~d.columns.duplicated()]
+
 for name, net, n_show in [("progeny", progeny, 14), ("collectri", collectri, 20)]:
-    es, pv = dc.mt.ulm(data=mat, net=net, tmin=5)
+    es, pv = dc.mt.ulm(data=for_net(mat, net), net=net, tmin=5)
+    if es.shape[1] < net["source"].nunique() / 2:
+        print(f"[warn] only {{es.shape[1]}} of {{net['source'].nunique()}} {{name}} sources could be scored")
     sc_ = es.iloc[0]
     sc_ = sc_.reindex(sc_.abs().sort_values(ascending=False).index).head(n_show).sort_values()
     fig, ax = plt.subplots(figsize=(5.8, .28 * len(sc_) + 1.4))

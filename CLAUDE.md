@@ -50,6 +50,15 @@ page says so. Deploys to Cloudflare Pages as static assets.
   rejects `ncbi-geneid` sources). `python tests/test_dossier.py` checks the offline/hung paths without network.
 - Sister apps: MassSpec Bench :8766, Structure Bench :8767 (dossier links to `#uniprot=` / `#gene=&species=`),
   Clone Bench :8768.
+- Gene-symbol case, two opposite rules (3.9.1, `resources.match_case`): **decoupler networks** (PROGENy,
+  CollecTRI) use each organism's own spelling — mouse `Tmprss2` — so translate the data into the network's
+  case; never upper-case mouse for these. **Enrichr gene-set libraries** are upper-case for every organism,
+  `KEGG_2019_Mouse` included, so GSEA/Enrichr *do* upper-case mouse symbols, correctly. Getting this
+  backwards cost the whole TF section in bulk and, in single cell, silently scored 1–2 of 14 pathways and
+  showed them as the result — hence `resources.coverage` and the flag when under half can be scored.
+  `tests/test_activity_case.py` covers both directions and the sparse case.
+- Tests must not run against the user's own `TL_HOME`: writing into a job folder changes its date and moves
+  that analysis to the top of Recent. `tests/fake_agent_test.py` hard-links a job into a temp home instead.
 - Mac app runs `launch.sh` (arm64 re-exec guard, venv rebuild guard, requirements hash → reinstall). In gui
   mode the launcher **waits on the server** so the app is a real Dock entry; do not put it back in the
   background.

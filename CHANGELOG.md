@@ -1,5 +1,30 @@
 # RNAseq Bench changelog
 
+## 3.9.1 — 2026-10-01
+- **Fixed: pathway and transcription-factor activity was wrong on mouse data.** Mouse gene symbols were
+  upper-cased before being scored against PROGENy and CollecTRI, but those networks are themselves
+  mouse-case (`Tmprss2`, not `TMPRSS2`) — only 16 of PROGENy's 5,202 mouse targets are upper-case. In a
+  **bulk** analysis the step failed outright and reported itself as skipped, so the per-sample heatmap,
+  the group table and the whole transcription-factor section were lost. In **single cell** it did not
+  fail, which was worse: it scored one or two of the fourteen pathways from the few genes that happened
+  to match, and showed them as the answer.
+
+  Gene names are now translated into whichever spelling the network uses, so a mouse table works whether
+  it is written `Tmprss2` or `TMPRSS2`. On the mouse example this restores the activity section from one
+  figure to four, with all 14 pathways and 190 transcription factors. The generated script carries the
+  same fix. (Gene-set enrichment is unaffected and still upper-cases mouse symbols — correctly, because
+  Enrichr's libraries are upper-case for every organism, `KEGG_2019_Mouse` included.)
+
+  **If you ran a mouse analysis before this, open it and press Re-analyze** to get the missing sections.
+- **A partial activity result now says so.** If fewer than half the pathways or factors can be scored,
+  the analysis says how many and why instead of presenting the few that worked as the whole picture.
+- **Back and Forward move between analyses.** The address bar already carried the open analysis so a link
+  could be shared; the browser's history now follows it, and Back from an analysis returns to the one
+  before it rather than leaving the app.
+- **Fixed: the agent test stamped today's date on one of your analyses.** `tests/fake_agent_test.py` ran
+  against the most recent real single-cell job and wrote a figure into it, which pushed that analysis to
+  the top of Recent with the wrong date. It now works on a throw-away hard-linked copy.
+
 ## 3.9.0
 - **RNAseq Bench quits when you close it.** Closing its window — the browser tab it runs in — stops the
   server a few seconds later, and quitting it in the Dock stops it at once. Nothing is left listening on

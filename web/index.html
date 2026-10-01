@@ -784,7 +784,16 @@ $("#demoSc").onclick=()=>demo("sc");$("#demoBulk").onclick=()=>demo("bulk");
 async function demo(w){if(!settingsOK())return;showRunning(w,w==="sc"?"Fetching PBMC 3k…":"Loading GSE96870…");try{const r=await fetch("/api/demo/"+w,{method:"POST"});const j=await r.json();startPoll(j.job,j.kind)}catch(e){runError(e.message)}}
 $("#newBtn").onclick=$("#homeLink").onclick=e=>{e.preventDefault();go("home")};
 
-function go(view){for(const v of["home","running","results","workflow"])$("#"+v).hidden=v!==view;$("#navWrap").hidden=$("#dlWrap").hidden=view!=="results";if(view==="home"){history.replaceState(null,"","#");renderRecent();window.__heroRestart()}window.scrollTo(0,0)}
+/* The address bar carries the analysis that is open, so a link to one can be shared and the browser's
+   Back and Forward move between the analyses you have opened. Opening a different analysis adds a
+   history entry; everything else replaces the current one, so Back never walks through half-states. */
+function setHash(h,push){if(location.hash===h||(!location.hash&&h==="#"))return;
+ (push?history.pushState:history.replaceState).call(history,null,"",h)}
+addEventListener("hashchange",()=>{const m=location.hash.match(/job=(\w+)/);
+ if(m){if(m[1]!==S.job)loadResult(m[1],true)}            /* fromUrl: do not push what we just came from */
+ else if(!$("#results").hidden||!$("#running").hidden)go("home")});
+
+function go(view){for(const v of["home","running","results","workflow"])$("#"+v).hidden=v!==view;$("#navWrap").hidden=$("#dlWrap").hidden=view!=="results";if(view==="home"){setHash("#",false);renderRecent();window.__heroRestart()}window.scrollTo(0,0)}
 /* Past analyses come from the server, not this browser's storage: a run started from another browser,
    by the assistant, or as a re-run you never opened is still yours and must be reachable. */
 let RECENT_ALL = false;
@@ -859,15 +868,15 @@ async function sideRecent(){
 function updRun(s){const kind=S.runKind==="bulk"?"bulk":"sc";sideRunning(s);window.__runPct=s.pct||0;$("#runBar").style.width=Math.max(2,s.pct)+"%";$("#runPct").textContent=Math.round(s.pct)+"%";$("#runMsg").textContent=s.message;
  const st=STEPS[kind];$("#runSteps").innerHTML=st.map(([p,l],i)=>{const next=st[i+1]?st[i+1][0]:101;const cls=s.pct>=next||s.state==="done"?"done":s.pct>=p?"now":"";return`<li class="${cls}"><i></i>${l}</li>`}).join("")}
 function runError(m,trace){$("#runTitle").textContent="Analysis stopped";$("#runErr").innerHTML=`<div class="errbox">${esc(m)}</div>${trace?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted)">Technical details (copy this when reporting a problem)</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:320px;overflow:auto;background:var(--panel2);padding:10px;border-radius:8px">${esc(trace)}</pre><button class="btn" onclick="navigator.clipboard.writeText(${JSON.stringify(m+"\n"+trace)});toast('Copied')">Copy details</button></details>`:""}<div class="row" style="margin-top:12px"><button class="btn" onclick="go('home')">Back to upload</button></div>`}
-function startPoll(job,kind){S.runKind=kind;S.runJob=job;clearInterval(S.poll);history.replaceState(null,"","#job="+job);
+function startPoll(job,kind){S.runKind=kind;S.runJob=job;clearInterval(S.poll);setHash("#job="+job,false);
  S.poll=setInterval(async()=>{try{const r=await fetch(`/api/jobs/${job}/status`);if(!r.ok)return;const s=await r.json();updRun(s);if(s.state==="done"){clearInterval(S.poll);sideRunning(null);S.runJob=null;sideRecent();loadResult(job)}else if(s.state==="cancelled"){clearInterval(S.poll);sideRunning(null);S.runJob=null;sideRecent();
    $("#runTitle").textContent="Analysis stopped";$("#runMsg").textContent="";$("#stopBtn").hidden=true;
    $("#runErr").innerHTML='<div class="errbox">You stopped this analysis. Nothing further was computed; any earlier analyses are untouched.</div><div class="row" style="margin-top:12px"><button class="btn" onclick="go(\'home\')">Back to upload</button></div>'}
   else if(s.state==="error"){clearInterval(S.poll);sideRunning(null);S.runJob=null;runError(s.error||"Unknown error",s.trace)}}catch{}},900)}
 
 /* results */
-async function loadResult(job){const r=await fetch(`/api/jobs/${job}/result`);if(!r.ok){const s=await fetch(`/api/jobs/${job}/status`);if(s.ok){const st=await s.json();if(st.state==="running"){showRunning(S.runKind||"sc",st.message);startPoll(job,S.runKind||"sc");return}}toast("That analysis is no longer available.");go("home");return}
- const res=await r.json();S.job=job;S.result=res;history.replaceState(null,"","#job="+job);
+async function loadResult(job,fromUrl){const r=await fetch(`/api/jobs/${job}/result`);if(!r.ok){const s=await fetch(`/api/jobs/${job}/status`);if(s.ok){const st=await s.json();if(st.state==="running"){showRunning(S.runKind||"sc",st.message);startPoll(job,S.runKind||"sc");return}}toast("That analysis is no longer available.");go("home");return}
+ const res=await r.json();S.job=job;S.result=res;setHash("#job="+job,!fromUrl);
  const rec=store.get("recent",[]).filter(x=>x.job!==job);rec.unshift({job,name:res.name,kind:res.kind,t:Date.now()});store.set("recent",rec.slice(0,12));
  renderResults(res);go("results")}
 const F=(job,p)=>`/api/jobs/${job}/files/${p}`;
@@ -1509,7 +1518,7 @@ addEventListener("beforeunload",e=>{if(S.runJob){e.preventDefault();e.returnValu
 /* boot */
 syncForms();renderRecent();sideRecent();
 $("#recentMore").onclick=()=>{RECENT_ALL=!RECENT_ALL;renderRecent()};
-const m=location.hash.match(/job=([\w]+)/);if(m)loadResult(m[1]);
+const m=location.hash.match(/job=([\w]+)/);if(m)loadResult(m[1],true);
 fetch("/api/settings").then(r=>r.json()).then(s=>{const v=document.getElementById("appVersion");if(v&&s.version)v.textContent="v"+s.version;}).catch(()=>{});
 </script>
 </body>

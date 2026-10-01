@@ -34,6 +34,8 @@ def gsea(job: Job, res: pd.DataFrame, organism: str, alt: str, ref: str) -> bool
         r = res.dropna(subset=["stat"]).copy()
         r.index = r.index.astype(str)
         if organism == "mouse":
+            # correct here, unlike the decoupler networks: Enrichr's libraries are upper-case for every
+            # organism, KEGG_2019_Mouse included. See resources.match_case.
             r.index = r.index.str.upper()
         r = r[~r.index.duplicated()]
         rnk = r["stat"].sort_values(ascending=False)
@@ -131,6 +133,19 @@ def activity(job: Job, res: pd.DataFrame, vst: pd.DataFrame, meta: pd.DataFrame,
         stat.index = stat.index.astype(str)
         stat = stat[~stat.index.duplicated()]
         mat = pd.DataFrame([stat.values], index=[f"{alt} vs {ref}"], columns=stat.index)
+
+        def for_net(df: pd.DataFrame, net: pd.DataFrame) -> pd.DataFrame:
+            """The same data spelled the way this network spells genes (see resources.match_case)."""
+            d = df.copy()
+            d.columns = resources.match_case(d.columns, net)
+            return d.loc[:, ~d.columns.duplicated()]
+
+        def check_coverage(es: pd.DataFrame, net: pd.DataFrame, what: str) -> None:
+            got, total = resources.coverage(es, net)
+            if got < total / 2:
+                job.flag("warn", f"{what}: only {got} of {total} could be scored — too few of their genes are in your table. "
+                                 "Usually the gene IDs are not symbols, or the species was mis-detected.")
+
         job.section("activity", "Step 6", "Pathway & transcription-factor activity",
                     "Instead of asking which genes changed, infer what is driving them: PROGENy scores 14 signalling pathways from their "
                     "downstream responsive genes, and CollecTRI scores transcription factors from their known targets (decoupler, "
@@ -138,7 +153,8 @@ def activity(job: Job, res: pd.DataFrame, vst: pd.DataFrame, meta: pd.DataFrame,
                     f"{alt}. This is footprint-based, so a pathway can be active even when its own components are not differentially expressed.")
         done = False
         if prog is not None:
-            es, pv = dc.mt.ulm(data=mat, net=prog, tmin=5)
+            es, pv = dc.mt.ulm(data=for_net(mat, prog), net=prog, tmin=5)
+            check_coverage(es, prog, "PROGENy pathways")
             s = es.iloc[0].sort_values(); p = pv.iloc[0].reindex(s.index)
             fig, ax = plt.subplots(figsize=(5.8, 4.2))
             ax.barh(range(len(s)), s.values, color=[UP if v > 0 else DOWN for v in s.values], alpha=0.9)
@@ -156,9 +172,7 @@ def activity(job: Job, res: pd.DataFrame, vst: pd.DataFrame, meta: pd.DataFrame,
                        yours=(f"More active in {alt}: <b>{', '.join(top_up)}</b>. " if top_up else "") + (f"Less active: <b>{', '.join(top_dn)}</b>." if top_dn else "") or "No pathway reaches p < 0.05.")
             # per-sample activities on VST
             v = vst.T.copy(); v.columns = v.columns.astype(str)
-            if organism == "mouse":
-                v.columns = v.columns.str.upper()
-            v = v.loc[:, ~v.columns.duplicated()]
+            v = for_net(v, prog)
             v = v - v.mean(axis=0)
             es_s, _ = dc.mt.ulm(data=v, net=prog, tmin=5)
             es_s.to_csv(job.root / "pathway_activity_per_sample.csv")
@@ -193,7 +207,7 @@ def activity(job: Job, res: pd.DataFrame, vst: pd.DataFrame, meta: pd.DataFrame,
             job.download("Pathway activity per sample (.csv)", "pathway_activity_per_sample.csv")
             done = True
         if tri is not None:
-            es, pv = dc.mt.ulm(data=mat, net=tri, tmin=5)
+            es, pv = dc.mt.ulm(data=for_net(mat, tri), net=tri, tmin=5)
             s = es.iloc[0]; p = pv.iloc[0]
             df = pd.DataFrame({"TF": s.index, "score": s.values, "p": p.values}).sort_values("score")
             df.to_csv(job.root / "tf_activity.csv", index=False)

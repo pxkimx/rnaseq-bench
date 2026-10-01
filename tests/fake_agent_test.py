@@ -1,18 +1,42 @@
-import sys, os, json, types, pathlib
+import atexit, os, pathlib, shutil, sys, tempfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-os.environ.setdefault("TL_HOME", os.path.expanduser("~/Library/Application Support/RNAseqBench")); os.environ["ANTHROPIC_API_KEY"] = "sk-test"
-import anthropic
-from server import agent
-# the scripted tool call reads analyzed.h5ad, so pick the most recent *single-cell* job
-def _newest_sc():
-    jobs = sorted((pathlib.Path(os.environ["TL_HOME"]) / "jobs").iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
-    for d in jobs:
-        if (d / "analyzed.h5ad").exists():
-            return d.name
-    raise SystemExit("no finished single-cell job in TL_HOME — run one first (tests/run_job.py sc ...)")
+os.environ["ANTHROPIC_API_KEY"] = "sk-test"
+
+# The scripted tool call reads analyzed.h5ad, so this needs a finished single-cell analysis. It runs
+# against a throw-away copy of one rather than against the real job: the agent writes agent_umap.png
+# into the job folder, and even though the test removes it again, the folder's timestamp changes and
+# the user's analysis jumps to the top of Recent with today's date on it. The files are hard-linked,
+# so nothing is copied and the original's timestamps are not touched.
+SRC_HOME = pathlib.Path(os.environ.get("RB_SRC_HOME", os.path.expanduser("~/Library/Application Support/RNAseqBench")))
 
 
-JOB = _newest_sc()
+def _newest_sc(home):
+    d = home / "jobs"
+    if not d.is_dir():
+        raise SystemExit(f"no analyses in {home} — run one first (tests/run_job.py sc ...)")
+    for j in sorted(d.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+        if (j / "analyzed.h5ad").exists():
+            return j
+    raise SystemExit(f"no finished single-cell job in {home} — run one first (tests/run_job.py sc ...)")
+
+
+src = _newest_sc(SRC_HOME)
+TMP = pathlib.Path(tempfile.mkdtemp(prefix="rnaseq-bench-agent-test-"))
+atexit.register(shutil.rmtree, TMP, True)
+JOB = src.name
+work = TMP / "jobs" / JOB
+work.mkdir(parents=True)
+for f in src.iterdir():
+    if f.is_file():
+        try:
+            os.link(f, work / f.name)          # same filesystem: no copy, and the original is untouched
+        except OSError:
+            shutil.copy2(f, work / f.name)     # different filesystem: fall back to a copy
+print(f"testing against a throw-away copy of {JOB} in {TMP}")
+os.environ["TL_HOME"] = str(TMP)               # agent.JOBS is read at import, so this must come first
+
+import anthropic                               # noqa: E402
+from server import agent                       # noqa: E402
 class Blk:
     def __init__(self, **k): self.__dict__.update(k)
     def model_dump(self): return dict(self.__dict__)
@@ -43,8 +67,8 @@ anthropic.Anthropic = Fake
 out = list(agent.chat("c1", "what changed?", JOB, lambda j, p: {"job": "x"}))
 for o in out: print(o.strip()[:160])
 assert any('"type": "done"' in o for o in out)
-png = pathlib.Path(os.environ["TL_HOME"]) / "jobs" / JOB / "agent_umap.png"
+png = work / "agent_umap.png"
 print("agent_umap.png exists:", png.exists())
 assert png.exists(), "run_python did not produce the figure"
-png.unlink()
+assert not (src / "agent_umap.png").exists(), "the test wrote into the user's own analysis folder"
 print(agent.available_models())

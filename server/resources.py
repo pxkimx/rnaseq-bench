@@ -98,6 +98,34 @@ def _net(kind: str, organism: str) -> pd.DataFrame | None:
         return None
 
 
+def match_case(names, net: pd.DataFrame) -> list[str]:
+    """Rename genes to the spelling the network itself uses, ignoring case.
+
+    PROGENy and CollecTRI arrive in each organism's own convention — human TMPRSS2, mouse Tmprss2 —
+    and a count table may use either. Upper-casing mouse symbols used to be the fix here and was the
+    wrong one: it produced a spelling the mouse network almost never uses (25 of PROGENy's 6,398
+    mouse targets are upper-case), so ULM found too few targets per source. In bulk that raised
+    "No sources with more than tmin=5 targets" and the whole step was reported as skipped; in
+    single-cell it did not fail, which was worse — it scored one or two of the fourteen pathways
+    from the handful of genes that happened to match and reported them as the answer.
+
+    This goes the other way: whatever case the data uses, it is translated into the network's.
+    Note that Enrichr's gene-set libraries are the opposite case — they are upper-case for every
+    organism, including KEGG_2019_Mouse — so the GSEA and Enrichr paths do upper-case mouse symbols,
+    and correctly.
+    """
+    lut: dict[str, str] = {}
+    for t in net["target"].astype(str):
+        lut.setdefault(t.upper(), t)
+    return [lut.get(str(n).upper(), str(n)) for n in names]
+
+
+def coverage(es: pd.DataFrame, net: pd.DataFrame) -> tuple[int, int]:
+    """(sources scored, sources in the network). A score built from a fraction of the network is
+    not a weaker answer, it is a different one, and the caller has to be able to say so."""
+    return int(es.shape[1]), int(net["source"].nunique())
+
+
 def progeny(organism: str = "human") -> pd.DataFrame | None:
     """PROGENy: 14 signalling pathways -> responsive genes with weights (top 500 per pathway)."""
     return _net("progeny", organism)
