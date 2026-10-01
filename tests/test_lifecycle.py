@@ -3,8 +3,10 @@
 Run:  python3 tests/test_lifecycle.py
 """
 import os
+import subprocess
 import sys
 import time
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import lifecycle as L  # noqa: E402
@@ -107,6 +109,61 @@ try:
 except (ProcessLookupError, PermissionError):
     alive = False
 check("and so is the process it started", alive, False)
+
+# ---------------------------------------------------------------- nothing survives the app
+# PyDESeq2 runs on a joblib worker pool. Those processes are forked by loky, not by us, so
+# register_child never sees them — and they have a 300 s idle timeout of their own, so after a bulk
+# analysis four processes of about 60 MB each outlived the app by minutes. The quit path now reads
+# the process table instead of trusting a register.
+try:
+    import joblib  # noqa: F401
+    have_joblib = True
+except ImportError:
+    have_joblib = False
+
+if not have_joblib:
+    print("--  joblib not installed in this interpreter — skipping the worker-pool check")
+else:
+    # The child finds its own workers with its own walk of the process table, not with
+    # lifecycle.descendants(). If it used the code under test, a version where that function is
+    # missing or broken would report an empty list and "no worker survived" would pass on nothing.
+    child = subprocess.run(
+        [sys.executable, "-c", f"""
+import os, subprocess, sys, time
+sys.path.insert(0, {str(Path(__file__).resolve().parent.parent)!r})
+from joblib import Parallel, delayed
+from server import lifecycle
+Parallel(n_jobs=2)(delayed(abs)(i) for i in range(4))     # starts the pool the way PyDESeq2 does
+time.sleep(1.0)
+rows = subprocess.run(["ps", "-axo", "pid=,ppid="], capture_output=True, text=True).stdout
+kids = {{}}
+for ln in rows.splitlines():
+    f = ln.split()
+    if len(f) == 2 and f[0].isdigit() and f[1].isdigit():
+        kids.setdefault(int(f[1]), []).append(int(f[0]))
+mine, stack = [], [os.getpid()]
+while stack:
+    for c in kids.get(stack.pop(), []):
+        mine.append(c); stack.append(c)
+print("POOL", *sorted(mine), flush=True)
+lifecycle.quit_now("test")
+"""],
+        capture_output=True, text=True, timeout=120)
+    if not any(l.startswith("POOL") for l in child.stdout.splitlines()):
+        print("     child said:", (child.stderr or child.stdout).strip().splitlines()[-1:] or "nothing")
+    line = next((l for l in child.stdout.splitlines() if l.startswith("POOL")), "")
+    pool = [int(x) for x in line.split()[1:]]
+    # without this the next check could pass simply because nothing was found
+    check("a worker pool really is started, and is not registered anywhere", len(pool) >= 2, True)
+    time.sleep(1.0)
+    survivors = [p for p in pool if L._alive(p)]
+    check("no worker survives the app quitting", survivors, [])
+    if survivors:                                          # never leave the user's machine worse off
+        for p in survivors:
+            try:
+                os.kill(p, 9)
+            except OSError:
+                pass
 
 print()
 if fails:

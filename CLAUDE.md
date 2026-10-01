@@ -50,6 +50,10 @@ page says so. Deploys to Cloudflare Pages as static assets.
   rejects `ncbi-geneid` sources). `python tests/test_dossier.py` checks the offline/hung paths without network.
 - Sister apps: MassSpec Bench :8766, Structure Bench :8767 (dossier links to `#uniprot=` / `#gene=&species=`),
   Clone Bench :8768.
+- Quitting kills every process *below* the server (`lifecycle.descendants`, read from `ps`), not only the
+  ones passed to `register_child`: PyDESeq2's `DefaultInference(n_cpus=4)` makes joblib fork a loky pool
+  the server never gets a handle to, and `os._exit` skips joblib's own atexit. `run_safely` also calls
+  `lifecycle.stop_pool()` so the pool does not idle for 300 s between analyses.
 - Job files other processes read while an analysis runs (`status.json`, `result.json`, `request.json`) go
   through `common.write_json`, which writes a neighbour and `os.replace`s it. A plain `write_text`
   truncates first and was caught half written on 7% of reads under load (`tests/test_job_files.py`, which

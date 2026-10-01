@@ -173,6 +173,11 @@ def run_safely(job: Job, fn, *args, **kw):
         tb = traceback.format_exc()
         print(tb, flush=True)
         job.set_status("error", 100, "Stopped", error=f"{type(e).__name__}: {e}", trace=tb[-6000:] + "\n" + env_summary())
+    finally:
+        # PyDESeq2 runs on a joblib worker pool that stays alive for 300 s after the analysis ends,
+        # four processes of about 60 MB each. Nothing needs them once the run is over.
+        from .lifecycle import stop_pool
+        stop_pool()
 
 
 def log_exc(where: str) -> str:

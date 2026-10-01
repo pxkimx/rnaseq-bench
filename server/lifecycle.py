@@ -14,7 +14,9 @@ copies listening on the port. This module makes the window and the server end to
   browser crashed, or was force-quit), the server stops as well.
 * If the launcher that started the server is gone — the app was quit from the Dock, which
   is a SIGKILL a shell trap never sees — the server stops.
-* Whatever the reason, a process the app started is killed with it, as a group.
+* Whatever the reason, every process below the server is killed with it — not only the ones it was
+  handed a handle to. PyDESeq2 asks joblib for a worker pool, which forks processes the server never
+  sees; four of those, about 60 MB each, used to outlive the app by minutes.
 
 Counting is in checks rather than wall-clock time, so a Mac waking from sleep does not
 find the deadline already past and quit the app the user just came back to.
@@ -24,6 +26,7 @@ from __future__ import annotations
 import atexit
 import os
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -130,9 +133,69 @@ def should_quit(connected: int, seen: bool, empty: int, closing: bool) -> tuple[
     return (closing and empty >= AFTER_CLOSE) or empty >= AFTER_SILENCE, True, empty, closing
 
 
+def descendants(root: int | None = None) -> list[int]:
+    """Every process below this one, furthest away first.
+
+    Not everything the app starts can be registered with register_child: PyDESeq2 asks joblib for a
+    worker pool, and loky forks processes the server is never handed a reference to. Reading the
+    process table finds them whoever started them, and killing the furthest first means a parent is
+    never killed before its own children, which would leave them to be adopted by launchd.
+    """
+    root = os.getpid() if root is None else root
+    try:
+        out = subprocess.run(["ps", "-axo", "pid=,ppid="], capture_output=True, text=True, timeout=5).stdout
+    except Exception:  # noqa: BLE001
+        return []
+    kids: dict[int, list[int]] = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) != 2:
+            continue
+        try:
+            pid, ppid = int(parts[0]), int(parts[1])
+        except ValueError:
+            continue
+        kids.setdefault(ppid, []).append(pid)
+    found: list[int] = []
+    stack = [root]
+    while stack:
+        for child in kids.get(stack.pop(), []):
+            found.append(child)
+            stack.append(child)
+    return found[::-1]
+
+
+def stop_pool() -> None:
+    """Shut down the worker pool PyDESeq2 leaves running between analyses.
+
+    joblib keeps its pool alive for 300 s in case another job wants it, which means four idle
+    processes of about 60 MB each sit there after every bulk analysis. Ending them when the run ends
+    is the tidy half of the fix; the sweep below is what guarantees none survive the app.
+    """
+    try:
+        from joblib.externals.loky import get_reusable_executor
+        get_reusable_executor().shutdown(wait=False, kill_workers=True)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def quit_now(reason: str) -> None:
     _log(f"quitting: {reason}")
     stop_children()
+    stop_pool()
+    left = descendants()
+    if left:
+        _log(f"stopping {len(left)} process(es) an analysis left behind")
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            for pid in left:
+                try:
+                    os.kill(pid, sig)
+                except (ProcessLookupError, PermissionError):
+                    pass
+            time.sleep(0.3)
+            left = [p for p in left if _alive(p)]
+            if not left:
+                break
     os._exit(0)
 
 

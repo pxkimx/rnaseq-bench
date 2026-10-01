@@ -1,5 +1,21 @@
 # RNAseq Bench changelog
 
+## 3.9.3 — 2026-10-01
+- **Fixed: a bulk analysis left worker processes running after the app quit.** PyDESeq2 runs on a
+  joblib worker pool, and those processes are forked by joblib rather than started by the app, so the
+  tidy-up on quit — which only knew about processes it had been handed — never saw them. After a bulk
+  or pseudobulk analysis, four processes of about 60 MB each plus two small trackers — roughly 270 MB
+  in all — stayed alive and re-parented to the system for **about five minutes** after the window was
+  closed, until joblib's own idle timeout ended them. So it was a window, not a permanent leak, but
+  the app is meant to be gone when you close it. Quitting now reads the process table and ends
+  everything below the server, whoever started it.
+- **The pool also shuts down when an analysis ends**, instead of idling for five minutes in case
+  another one arrives. A finished bulk analysis no longer leaves ~250 MB of idle workers behind while
+  you read the results.
+- `tests/test_lifecycle.py` now starts a real worker pool and checks none of it survives a quit. It
+  finds the worker processes by its own reading of the process table rather than by calling the code
+  it is testing, so a broken or missing sweep fails the test instead of reporting nothing to check.
+
 ## 3.9.2 — 2026-10-01
 - **Fixed: a running analysis could report an error it had not had.** Each step rewrote `status.json`
   in place, truncating it before writing, while the page polled that file every 1.5 s and the
