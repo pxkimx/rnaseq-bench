@@ -50,6 +50,16 @@ page says so. Deploys to Cloudflare Pages as static assets.
   rejects `ncbi-geneid` sources). `python tests/test_dossier.py` checks the offline/hung paths without network.
 - Sister apps: MassSpec Bench :8766, Structure Bench :8767 (dossier links to `#uniprot=` / `#gene=&species=`),
   Clone Bench :8768.
+- Theme (3.10.0): tokens on `:root`, overridden by `:root[data-theme="light"|"dark"]`; the media query is
+  written `:root:not([data-theme=…])` so an explicit choice wins. An inline script in `<head>` applies the
+  saved choice **before first paint** — do not move it to the end of the page, that was the flash. The
+  `Light | Dark` pill lives in `.themewrap`, which the narrow-width rules must keep visible (the old moon
+  button was inside `.foot`, which is hidden under 900px, i.e. inside Toolbox Launcher's frame). Switching
+  dispatches `themechange` for the canvases; CSS follows by itself. Figures stay print-coloured on a white
+  mat (`.fig{background:#fff}`) in both themes.
+- Measuring contrast in the browser pane: kill transitions first (`*{transition:none!important}`). With the
+  pane hidden, frames are throttled and a transitioned colour freezes part-way, and `getComputedStyle` hands
+  back that half-finished value as if it were final — it reported light-theme colours in dark and vice versa.
 - Quitting kills every process *below* the server (`lifecycle.descendants`, read from `ps`), not only the
   ones passed to `register_child`: PyDESeq2's `DefaultInference(n_cpus=4)` makes joblib fork a loky pool
   the server never gets a handle to, and `os._exit` skips joblib's own atexit. `run_safely` also calls

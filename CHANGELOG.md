@@ -1,5 +1,23 @@
 # RNAseq Bench changelog
 
+## 3.10.0 — 2026-10-07
+- **Light or dark, your choice.** A *Light | Dark* switch sits under **Appearance** in the sidebar, on
+  every page, in both the app and the browser version. Until you pick, nothing changes: the app keeps
+  following your Mac's own light/dark setting, exactly as before. Your choice is remembered and now
+  applied *before the page is drawn* — the old moon button applied it at the end of the page, so
+  opening the app with the non-default theme showed a flash of the other one first.
+- The switch replaces that moon button, which was also hidden on narrow windows — including inside
+  Toolbox Launcher's frame, where it was the one place you could not reach it.
+- **Contrast.** Checked every piece of visible text against the surface behind it, in both themes, on
+  the home screen and on a finished report. Three colours missed the 4.5:1 the tools are held to and
+  were darkened: secondary text in light (4.39 → 4.64 on the chip grey it sits on), and the warning
+  colour in the app (4.47 → 4.97) and in the browser version, where the bold text in a warning box
+  sits on a tint made from that same colour (4.33 → 4.68). Everything else already cleared it; dark's
+  weakest was 5.6:1.
+- Figures are unchanged in both themes — they keep their white background and their own colours, since
+  they are the same images you download and put in a paper. They sit on a white mat so they stay
+  readable in dark.
+
 ## 3.9.3 — 2026-10-01
 - **Fixed: a bulk analysis left worker processes running after the app quit.** PyDESeq2 runs on a
   joblib worker pool, and those processes are forked by joblib rather than started by the app, so the
