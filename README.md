@@ -1,5 +1,8 @@
 # RNAseq Bench
 
+**[paul-h-kim.com/software/rnaseq-bench](https://paul-h-kim.com/software/rnaseq-bench)** · created by
+Paul H. Kim, Ph.D. · MIT licensed
+
 A local app for bulk and single-cell RNA-seq: upload counts (or pull them straight from GEO), get the
 standard Scanpy / DESeq2 analyses with publication-style figures, a plain-language reading of every
 plot, a PDF report, the exact code that produced it — and a built-in Claude assistant that can explain,
@@ -96,3 +99,9 @@ server/dossier.py        gene dossier (Biopython: Entrez, UniProt, KEGG, AlphaFo
 Labels from the marker panel are hypotheses. Complex designs (interactions, time courses) need a custom
 model — ask the assistant to write it. Everything runs on your machine; only the assistant talks to
 Anthropic's API, and only with what you type plus the tool results it requests.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE). The bundled CellTypist model in `tests/res_offline/celltypist/` and the
+example dataset in `examples/` (GEO GSE96870) are third-party files included for offline testing and
+keep their own terms; the MIT licence covers this project's own code.
